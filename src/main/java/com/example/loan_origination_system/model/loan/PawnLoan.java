@@ -1,13 +1,28 @@
 package com.example.loan_origination_system.model.loan;
 
-import com.example.loan_origination_system.model.master.Branch;
-import com.example.loan_origination_system.model.master.Currency;
-import com.example.loan_origination_system.model.people.Customer;
-import jakarta.persistence.*;
-import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+
+import com.example.loan_origination_system.model.enums.LoanStatus;
+import com.example.loan_origination_system.model.master.Branch;
+import com.example.loan_origination_system.model.master.Currency;
+import com.example.loan_origination_system.model.people.Customer;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import lombok.Data;
 
 @Entity
 @Table(name = "pawn_loan")
@@ -20,29 +35,44 @@ public class PawnLoan {
     @Column(unique = true, nullable = false)
     private String loanCode;
 
-    @ManyToOne
-    @JoinColumn(name = "customer_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
-    @OneToOne
-    @JoinColumn(name = "pawn_item_id")
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pawn_item_id", nullable = false)
     private PawnItem pawnItem;
 
-    @ManyToOne
-    @JoinColumn(name = "currency_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "currency_id", nullable = false)
     private Currency currency;
 
-    @ManyToOne
-    @JoinColumn(name = "branch_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "branch_id", nullable = false)
     private Branch branch;
 
     @Column(nullable = false)
     private BigDecimal loanAmount;
+    
+    @Column(nullable = false)
     private BigDecimal interestRate;
+    
+    @Column(nullable = false)
+    private BigDecimal totalPayableAmount;
 
     private LocalDate loanDate = LocalDate.now();
     private LocalDate dueDate;
 
-    private String status = "PENDING";
+    @Enumerated(EnumType.STRING)
+    private LoanStatus status = LoanStatus.PENDING;
+    
     private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime updatedAt;
+    private LocalDateTime redeemedAt;
+    private LocalDateTime defaultedAt;
+    
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }
