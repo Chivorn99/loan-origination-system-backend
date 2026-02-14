@@ -55,15 +55,17 @@ jobs:
           path: target/*.jar
           retention-days: 7
 
+      - name: Install Railway CLI
+        run: |
+          curl -sSL https://railway.app/cli | sh  # Install Railway CLI
+
       - name: Login to Railway
-        uses: railwayapp/railway-action@v1
-        with:
-          railway_token: ${{ secrets.RAILWAY_API_TOKEN }}
+        run: |
+          railway login --token ${{ secrets.RAILWAY_API_TOKEN }}  # Login using the Railway API token
 
       - name: Deploy to Railway
         run: |
-          railway login --token ${{ secrets.RAILWAY_API_TOKEN }}
-          railway up --projectId ${{ secrets.RAILWAY_PROJECT_ID }}
+          railway up --projectId ${{ secrets.RAILWAY_PROJECT_ID }}  # Deploy to Railway
 
 
   # Code Quality Job
