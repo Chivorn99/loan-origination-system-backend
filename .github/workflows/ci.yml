@@ -57,9 +57,10 @@ jobs:
 
       - name: Install Railway CLI
         run: |
-          curl -sSL https://railway.app/cli > railway-cli.sh  # Download the Railway CLI script
-          chmod +x railway-cli.sh  # Make it executable
-          ./railway-cli.sh  # Run the script to install Railway CLI
+          curl -sSL https://github.com/railwayapp/cli/releases/latest/download/railway-linux-x64.tar.gz -o railway-cli.tar.gz  # Download Railway CLI tarball
+          tar -xzf railway-cli.tar.gz  # Extract the tarball
+          sudo mv railway /usr/local/bin  # Move the Railway CLI binary to the correct location
+          railway --version  # Verify the installation
 
       - name: Login to Railway
         run: |
