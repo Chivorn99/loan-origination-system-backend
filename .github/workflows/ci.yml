@@ -57,7 +57,9 @@ jobs:
 
       - name: Install Railway CLI
         run: |
-          curl -sSL https://railway.app/cli | sh  # Install Railway CLI
+          curl -sSL https://railway.app/cli > railway-cli.sh  # Download the Railway CLI script
+          chmod +x railway-cli.sh  # Make it executable
+          ./railway-cli.sh  # Run the script to install Railway CLI
 
       - name: Login to Railway
         run: |
