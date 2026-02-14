@@ -36,6 +36,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      - name: Make Maven Wrapper executable
+        run: chmod +x ./mvnw
+
       - name: Build with Maven
         run: ./mvnw clean compile -B
 
@@ -69,6 +72,9 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
 
+      - name: Make Maven Wrapper executable
+        run: chmod +x ./mvnw
+
       - name: Run Checkstyle (if configured)
         run: ./mvnw checkstyle:check -B || true
         continue-on-error: true
@@ -93,6 +99,9 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
+
+      - name: Make Maven Wrapper executable
+        run: chmod +x ./mvnw
 
       - name: OWASP Dependency Check
         run: ./mvnw org.owasp:dependency-check-maven:check -B || true
