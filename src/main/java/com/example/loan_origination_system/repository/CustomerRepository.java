@@ -27,4 +27,7 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     
     @Query("SELECT COUNT(l) > 0 FROM PawnLoan l WHERE l.customer.id = :customerId AND l.status = 'ACTIVE'")
     boolean hasActiveLoans(@Param("customerId") Long customerId);
+    
+    @Query("SELECT COUNT(c) > 0 FROM Customer c WHERE c.idNumber = :idNumber AND c.id != :excludeId")
+    boolean existsByIdNumberAndIdNot(@Param("idNumber") String idNumber, @Param("excludeId") Long excludeId);
 }
