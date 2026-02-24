@@ -1,22 +1,31 @@
 package com.example.loan_origination_system.controller;
 
-import com.example.loan_origination_system.dto.ApiResponse;
-import com.example.loan_origination_system.dto.PawnItemRequest;
-import com.example.loan_origination_system.model.enums.CollateralStatus;
-import com.example.loan_origination_system.model.loan.PawnItem;
-import com.example.loan_origination_system.model.people.Customer;
-import com.example.loan_origination_system.service.PawnItemService;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import com.example.loan_origination_system.dto.ApiResponse;
+import com.example.loan_origination_system.dto.PawnItemRequest;
+import com.example.loan_origination_system.model.enums.CollateralStatus;
+import com.example.loan_origination_system.model.loan.PawnItem;
+import com.example.loan_origination_system.service.PawnItemService;
+
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/pawn-items")
@@ -31,16 +40,7 @@ public class PawnItemController {
      */
     @PostMapping
     public ResponseEntity<ApiResponse<PawnItem>> createPawnItem(@Valid @RequestBody PawnItemRequest request) {
-        PawnItem pawnItem = new PawnItem();
-        Customer customer = new Customer();
-        customer.setId(request.getCustomerId());
-        pawnItem.setCustomer(customer);
-        pawnItem.setItemType(request.getItemType());
-        pawnItem.setDescription(request.getDescription());
-        pawnItem.setEstimatedValue(request.getEstimatedValue());
-        pawnItem.setPhotoUrl(request.getPhotoUrl());
-        
-        PawnItem createdPawnItem = pawnItemService.createPawnItem(pawnItem);
+        PawnItem createdPawnItem = pawnItemService.createPawnItem(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Collateral item created successfully", createdPawnItem));
     }
@@ -73,13 +73,7 @@ public class PawnItemController {
     public ResponseEntity<ApiResponse<PawnItem>> updatePawnItem(
             @PathVariable Long id,
             @Valid @RequestBody PawnItemRequest request) {
-        PawnItem pawnItemDetails = new PawnItem();
-        pawnItemDetails.setItemType(request.getItemType());
-        pawnItemDetails.setDescription(request.getDescription());
-        pawnItemDetails.setEstimatedValue(request.getEstimatedValue());
-        pawnItemDetails.setPhotoUrl(request.getPhotoUrl());
-        
-        PawnItem updatedPawnItem = pawnItemService.updatePawnItem(id, pawnItemDetails);
+        PawnItem updatedPawnItem = pawnItemService.updatePawnItem(id, request);
         return ResponseEntity.ok(ApiResponse.success("Collateral item updated successfully", updatedPawnItem));
     }
     

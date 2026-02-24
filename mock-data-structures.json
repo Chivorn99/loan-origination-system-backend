@@ -1,0 +1,489 @@
+{
+  "mockDataStructures": {
+    "description": "Complete mock data structures for Loan Origination System API testing",
+    "modules": [
+      {
+        "name": "Customer Management",
+        "entity": "Customer",
+        "endpoints": [
+          {
+            "method": "POST",
+            "url": "/api/customers",
+            "description": "Create new customer",
+            "requestBody": {
+              "fullName": "John Doe",
+              "phone": "+85512345678",
+              "idNumber": "123456789012",
+              "address": "Phnom Penh, Cambodia"
+            },
+            "responseExample": {
+              "success": true,
+              "message": "Customer created successfully",
+              "data": {
+                "id": 1,
+                "fullName": "John Doe",
+                "phone": "+85512345678",
+                "idNumber": "123456789012",
+                "address": "Phnom Penh, Cambodia",
+                "status": "ACTIVE",
+                "createdAt": "2024-01-15T10:30:00",
+                "updatedAt": "2024-01-15T10:30:00",
+                "deletedAt": null
+              }
+            }
+          },
+          {
+            "method": "PUT",
+            "url": "/api/customers/{id}",
+            "description": "Update customer",
+            "requestBody": {
+              "fullName": "John Smith",
+              "phone": "+85598765432",
+              "idNumber": "123456789012",
+              "address": "Siem Reap, Cambodia"
+            }
+          },
+          {
+            "method": "GET",
+            "url": "/api/customers?page=0&size=10&sortBy=createdAt&direction=desc",
+            "description": "Get paginated customers",
+            "responseExample": {
+              "success": true,
+              "data": {
+                "content": [
+                  {
+                    "id": 1,
+                    "fullName": "John Doe",
+                    "phone": "+85512345678",
+                    "idNumber": "123456789012",
+                    "address": "Phnom Penh, Cambodia",
+                    "status": "ACTIVE",
+                    "createdAt": "2024-01-15T10:30:00"
+                  }
+                ],
+                "pageable": {
+                  "pageNumber": 0,
+                  "pageSize": 10,
+                  "sort": {
+                    "sorted": true,
+                    "unsorted": false,
+                    "empty": false
+                  }
+                },
+                "totalElements": 1,
+                "totalPages": 1,
+                "last": true,
+                "size": 10,
+                "number": 0
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Collateral Management",
+        "entity": "PawnItem",
+        "endpoints": [
+          {
+            "method": "POST",
+            "url": "/api/pawn-items",
+            "description": "Create new collateral item",
+            "requestBody": {
+              "customerId": 1,
+              "itemType": "Gold Necklace",
+              "description": "24K gold necklace with pendant, weight 50g",
+              "estimatedValue": 1500.00,
+              "photoUrl": "https://example.com/photos/necklace.jpg"
+            },
+            "responseExample": {
+              "success": true,
+              "message": "Collateral item created successfully",
+              "data": {
+                "id": 1,
+                "customer": {
+                  "id": 1,
+                  "fullName": "John Doe"
+                },
+                "itemType": "Gold Necklace",
+                "description": "24K gold necklace with pendant, weight 50g",
+                "estimatedValue": 1500.00,
+                "photoUrl": "https://example.com/photos/necklace.jpg",
+                "status": "AVAILABLE",
+                "createdAt": "2024-01-16T14:20:00"
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "url": "/api/pawn-items/customer/1",
+            "description": "Get collateral items by customer ID",
+            "responseExample": {
+              "success": true,
+              "data": [
+                {
+                  "id": 1,
+                  "itemType": "Gold Necklace",
+                  "description": "24K gold necklace with pendant",
+                  "estimatedValue": 1500.00,
+                  "status": "AVAILABLE",
+                  "createdAt": "2024-01-16T14:20:00"
+                },
+                {
+                  "id": 2,
+                  "itemType": "Smartphone",
+                  "description": "iPhone 14 Pro Max 256GB",
+                  "estimatedValue": 1200.00,
+                  "status": "PAWNED",
+                  "createdAt": "2024-01-10T09:15:00"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "Loan Management",
+        "entity": "PawnLoan",
+        "endpoints": [
+          {
+            "method": "POST",
+            "url": "/api/pawn-loans",
+            "description": "Create new loan",
+            "requestBody": {
+              "customerId": 1,
+              "pawnItemId": 1,
+              "currencyId": 1,
+              "branchId": 1,
+              "loanAmount": 1000.00,
+              "interestRate": 5.0,
+              "dueDate": "2024-07-15"
+            },
+            "responseExample": {
+              "success": true,
+              "message": "Loan created successfully",
+              "data": {
+                "id": 1,
+                "loanCode": "LN-20240116-001",
+                "customer": {
+                  "id": 1,
+                  "fullName": "John Doe"
+                },
+                "pawnItem": {
+                  "id": 1,
+                  "itemType": "Gold Necklace"
+                },
+                "currency": {
+                  "id": 1,
+                  "code": "USD",
+                  "name": "US Dollar"
+                },
+                "branch": {
+                  "id": 1,
+                  "name": "Phnom Penh Main Branch"
+                },
+                "loanAmount": 1000.00,
+                "interestRate": 5.0,
+                "dueDate": "2024-07-15",
+                "status": "ACTIVE",
+                "createdAt": "2024-01-16T15:30:00"
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "url": "/api/pawn-loans/1/redeem",
+            "description": "Redeem a loan",
+            "responseExample": {
+              "success": true,
+              "message": "Loan redeemed successfully",
+              "data": {
+                "id": 1,
+                "status": "REDEEMED",
+                "redeemedAt": "2024-03-15T11:45:00"
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "url": "/api/pawn-loans/customer/1",
+            "description": "Get loans by customer ID",
+            "responseExample": {
+              "success": true,
+              "data": [
+                {
+                  "id": 1,
+                  "loanCode": "LN-20240116-001",
+                  "loanAmount": 1000.00,
+                  "interestRate": 5.0,
+                  "dueDate": "2024-07-15",
+                  "status": "ACTIVE",
+                  "createdAt": "2024-01-16T15:30:00"
+                },
+                {
+                  "id": 2,
+                  "loanCode": "LN-20231205-002",
+                  "loanAmount": 500.00,
+                  "interestRate": 4.5,
+                  "dueDate": "2024-06-30",
+                  "status": "REDEEMED",
+                  "createdAt": "2023-12-05T09:20:00"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "Repayment Management",
+        "entity": "PawnRepayment",
+        "endpoints": [
+          {
+            "method": "POST",
+            "url": "/api/pawn-repayments",
+            "description": "Create new repayment",
+            "requestBody": {
+              "pawnLoanId": 1,
+              "currencyId": 1,
+              "paymentMethodId": 1,
+              "paymentTypeId": 1,
+              "paidAmount": 1050.00,
+              "principalPaid": 1000.00,
+              "interestPaid": 50.00,
+              "penaltyPaid": 0.00,
+              "remainingPrincipal": 0.00,
+              "receivedBy": 1,
+              "paymentDate": "2024-06-15"
+            },
+            "responseExample": {
+              "success": true,
+              "message": "Repayment created successfully",
+              "data": {
+                "id": 1,
+                "pawnLoan": {
+                  "id": 1,
+                  "loanCode": "LN-20240116-001"
+                },
+                "paymentMethod": {
+                  "id": 1,
+                  "name": "Cash"
+                },
+                "paymentType": {
+                  "id": 1,
+                  "name": "Full Payment"
+                },
+                "paidAmount": 1050.00,
+                "principalPaid": 1000.00,
+                "interestPaid": 50.00,
+                "penaltyPaid": 0.00,
+                "remainingPrincipal": 0.00,
+                "paymentDate": "2024-06-15",
+                "createdAt": "2024-06-15T14:30:00"
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "url": "/api/pawn-repayments/loan/1",
+            "description": "Get repayment history for a loan",
+            "responseExample": {
+              "success": true,
+              "message": "Repayment history retrieved successfully",
+              "data": [
+                {
+                  "id": 1,
+                  "paidAmount": 1050.00,
+                  "principalPaid": 1000.00,
+                  "interestPaid": 50.00,
+                  "paymentDate": "2024-06-15",
+                  "paymentMethod": "Cash",
+                  "paymentType": "Full Payment"
+                }
+              ]
+            }
+          },
+          {
+            "method": "GET",
+            "url": "/api/pawn-repayments/loan/1/schedule",
+            "description": "Calculate repayment schedule",
+            "responseExample": {
+              "success": true,
+              "message": "Repayment schedule calculated successfully",
+              "data": {
+                "loanId": 1,
+                "totalAmount": 1050.00,
+                "principal": 1000.00,
+                "interest": 50.00,
+                "dueDate": "2024-07-15",
+                "schedule": [
+                  {
+                    "installmentNumber": 1,
+                    "dueDate": "2024-07-15",
+                    "principalDue": 1000.00,
+                    "interestDue": 50.00,
+                    "totalDue": 1050.00,
+                    "status": "PAID"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "masterData": {
+      "branches": [
+        {
+          "id": 1,
+          "code": "PP01",
+          "name": "Phnom Penh Main Branch",
+          "address": "Street 123, Phnom Penh",
+          "phone": "+85523234567"
+        },
+        {
+          "id": 2,
+          "code": "SR01",
+          "name": "Siem Reap Branch",
+          "address": "Pub Street, Siem Reap",
+          "phone": "+85563234567"
+        }
+      ],
+      "currencies": [
+        {
+          "id": 1,
+          "code": "USD",
+          "name": "US Dollar",
+          "symbol": "$"
+        },
+        {
+          "id": 2,
+          "code": "KHR",
+          "name": "Cambodian Riel",
+          "symbol": "៛"
+        }
+      ],
+      "paymentMethods": [
+        {
+          "id": 1,
+          "name": "Cash",
+          "description": "Cash payment"
+        },
+        {
+          "id": 2,
+          "name": "Bank Transfer",
+          "description": "Bank transfer payment"
+        },
+        {
+          "id": 3,
+          "name": "Mobile Payment",
+          "description": "Mobile banking payment"
+        }
+      ],
+      "paymentTypes": [
+        {
+          "id": 1,
+          "name": "Full Payment",
+          "description": "Full payment of principal and interest"
+        },
+        {
+          "id": 2,
+          "name": "Partial Payment",
+          "description": "Partial payment towards loan"
+        },
+        {
+          "id": 3,
+          "name": "Interest Only",
+          "description": "Interest payment only"
+        }
+      ],
+      "users": [
+        {
+          "id": 1,
+          "username": "admin",
+          "fullName": "System Administrator",
+          "role": "ADMIN"
+        },
+        {
+          "id": 2,
+          "username": "teller1",
+          "fullName": "John Teller",
+          "role": "TELLER"
+        }
+      ]
+    },
+    "testScenarios": [
+      {
+        "name": "Complete Loan Lifecycle",
+        "steps": [
+          "1. Create customer",
+          "2. Create collateral item for customer",
+          "3. Create loan using customer and collateral",
+          "4. Make repayment for the loan",
+          "5. Redeem the loan",
+          "6. Verify all status changes"
+        ]
+      },
+      {
+        "name": "Customer Management Flow",
+        "steps": [
+          "1. Create multiple customers",
+          "2. Update customer details",
+          "3. Search customers by ID number",
+          "4. Filter customers by status",
+          "5. Soft delete a customer",
+          "6. Verify deletion doesn't remove records"
+        ]
+      },
+      {
+        "name": "Reporting and Analytics",
+        "steps": [
+          "1. Create loans with different dates",
+          "2. Create repayments across date ranges",
+          "3. Test date range queries",
+          "4. Test daily collection reports",
+          "5. Test customer repayment summaries",
+          "6. Verify pagination works correctly"
+        ]
+      }
+    ],
+    "dataGenerationRules": {
+      "customer": {
+        "requiredFields": ["fullName", "idNumber"],
+        "validation": "idNumber must be unique",
+        "statusDistribution": {
+          "ACTIVE": 70,
+          "INACTIVE": 20,
+          "DELETED": 10
+        }
+      },
+      "pawnItem": {
+        "requiredFields": ["customerId", "itemType", "estimatedValue"],
+        "statusDistribution": {
+          "AVAILABLE": 40,
+          "PAWNED": 40,
+          "REDEEMED": 10,
+          "FORFEITED": 10
+        },
+        "itemTypes": ["Gold Jewelry", "Electronics", "Vehicles", "Documents", "Other Valuables"]
+      },
+      "pawnLoan": {
+        "requiredFields": ["customerId", "pawnItemId", "currencyId", "branchId", "loanAmount", "interestRate", "dueDate"],
+        "amountRange": {
+          "min": 100,
+          "max": 10000
+        },
+        "interestRateRange": {
+          "min": 3,
+          "max": 10
+        },
+        "termDays": {
+          "min": 30,
+          "max": 180
+        }
+      },
+      "pawnRepayment": {
+        "validation": "paidAmount must equal sum of principalPaid, interestPaid, and penaltyPaid",
+        "paymentDateLogic": "Should be on or after loan creation date, on or before current date"
+      }
+    }
+  }
+}
