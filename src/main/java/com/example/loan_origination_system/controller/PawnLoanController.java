@@ -19,11 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.loan_origination_system.dto.ApiResponse;
 import com.example.loan_origination_system.dto.PawnLoanRequest;
 import com.example.loan_origination_system.model.enums.LoanStatus;
-import com.example.loan_origination_system.model.loan.PawnItem;
 import com.example.loan_origination_system.model.loan.PawnLoan;
-import com.example.loan_origination_system.model.master.Branch;
-import com.example.loan_origination_system.model.master.Currency;
-import com.example.loan_origination_system.model.people.Customer;
 import com.example.loan_origination_system.service.PawnLoanService;
 
 import jakarta.validation.Valid;
@@ -42,29 +38,7 @@ public class PawnLoanController {
      */
     @PostMapping
     public ResponseEntity<ApiResponse<PawnLoan>> createLoan(@Valid @RequestBody PawnLoanRequest request) {
-        PawnLoan loan = new PawnLoan();
-        
-        Customer customer = new Customer();
-        customer.setId(request.getCustomerId());
-        loan.setCustomer(customer);
-        
-        PawnItem pawnItem = new PawnItem();
-        pawnItem.setId(request.getPawnItemId());
-        loan.setPawnItem(pawnItem);
-        
-        Currency currency = new Currency();
-        currency.setId(request.getCurrencyId());
-        loan.setCurrency(currency);
-        
-        Branch branch = new Branch();
-        branch.setId(request.getBranchId());
-        loan.setBranch(branch);
-        
-        loan.setLoanAmount(request.getLoanAmount());
-        loan.setInterestRate(request.getInterestRate());
-        loan.setDueDate(request.getDueDate());
-        
-        PawnLoan createdLoan = pawnLoanService.createLoan(loan);
+        PawnLoan createdLoan = pawnLoanService.createLoan(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Loan created successfully", createdLoan));
     }

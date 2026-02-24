@@ -1,7 +1,10 @@
-# Loan Origination System - Endpoint Summary by Module and Entity
+# Loan Origination System - Complete Endpoint Summary for Postman Testing
 
 ## Overview
-This document summarizes all REST API endpoints in the Loan Origination System, organized by module and entity. Each endpoint includes HTTP method, URL, description, request/response structures, and mock data recommendations.
+This document provides a comprehensive summary of all REST API endpoints in the Loan Origination System, organized by module and entity. Each endpoint includes HTTP method, URL, description, and request/response structures for Postman testing.
+
+## Base URL
+All endpoints are relative to: `http://localhost:8080/api`
 
 ## 1. Customer Management Module
 
@@ -16,25 +19,16 @@ This document summarizes all REST API endpoints in the Loan Origination System, 
 | GET | `/api/customers/{id}` | Get customer by ID | - | `Customer` |
 | GET | `/api/customers/by-id-number/{idNumber}` | Get customer by national ID | - | `Customer` |
 | PUT | `/api/customers/{id}` | Update customer | `CustomerRequest` | `Customer` |
-| GET | `/api/customers` | Get all customers (paginated) | Query params: `page`, `size`, `sortBy`, `direction` | `Page<Customer>` |
-| GET | `/api/customers/` | Get customers by status | Query params: `status`, `page`, `size` | `Page<Customer>` |
+| PATCH | `/api/customers/{id}` | Partial update customer | `CustomerPatchRequest` | `Customer` |
+| GET | `/api/customers` | Get all customers (paginated) | Query params: `page`, `size`, `sortBy`, `direction`, `status` | `Page<Customer>` |
 | DELETE | `/api/customers/{id}` | Soft delete customer | - | Success message |
 | GET | `/api/customers/{id}/has-active-loans` | Check if customer has active loans | - | `Boolean` |
 
 #### Data Structures:
 - **CustomerRequest**: `{fullName: string, phone: string, idNumber: string, address: string}`
+- **CustomerPatchRequest**: `{fullName: string, phone: string, idNumber: string, address: string}`
 - **Customer**: `{id: long, fullName: string, phone: string, idNumber: string, address: string, status: CustomerStatus, createdAt: LocalDateTime, updatedAt: LocalDateTime, deletedAt: LocalDateTime}`
 - **CustomerStatus**: `ACTIVE`, `INACTIVE`, `DELETED`
-
-#### Mock Data Recommendations:
-```json
-{
-  "fullName": "John Doe",
-  "phone": "+85512345678",
-  "idNumber": "123456789012",
-  "address": "Phnom Penh, Cambodia"
-}
-```
 
 ## 2. Collateral (Pawn Item) Management Module
 
@@ -61,17 +55,6 @@ This document summarizes all REST API endpoints in the Loan Origination System, 
 - **PawnItem**: Includes customer relationship, status, timestamps
 - **CollateralStatus**: `AVAILABLE`, `PAWNED`, `REDEEMED`, `FORFEITED`, `DELETED`
 
-#### Mock Data Recommendations:
-```json
-{
-  "customerId": 1,
-  "itemType": "Gold Necklace",
-  "description": "24K gold necklace with pendant",
-  "estimatedValue": 1500.00,
-  "photoUrl": "https://example.com/photo.jpg"
-}
-```
-
 ## 3. Loan Management Module
 
 ### Entity: PawnLoan
@@ -96,20 +79,7 @@ This document summarizes all REST API endpoints in the Loan Origination System, 
 #### Data Structures:
 - **PawnLoanRequest**: `{customerId: long, pawnItemId: long, currencyId: long, branchId: long, loanAmount: BigDecimal, interestRate: BigDecimal, dueDate: LocalDate}`
 - **PawnLoan**: Includes relationships with Customer, PawnItem, Currency, Branch
-- **LoanStatus**: (Check enum - likely includes `ACTIVE`, `REDEEMED`, `DEFAULTED`, etc.)
-
-#### Mock Data Recommendations:
-```json
-{
-  "customerId": 1,
-  "pawnItemId": 1,
-  "currencyId": 1,
-  "branchId": 1,
-  "loanAmount": 1000.00,
-  "interestRate": 5.0,
-  "dueDate": "2024-12-31"
-}
-```
+- **LoanStatus**: `ACTIVE`, `REDEEMED`, `DEFAULTED`, `FORFEITED`
 
 ## 4. Repayment Management Module
 
@@ -138,7 +108,190 @@ This document summarizes all REST API endpoints in the Loan Origination System, 
 - **PawnRepayment**: Includes relationships with PawnLoan, Currency, PaymentMethod, PaymentType, User
 - **Service Objects**: `RepaymentSchedule`, `DailyCollectionReport`, `CustomerRepaymentSummary`
 
-#### Mock Data Recommendations:
+## 5. Branch Management Module
+
+### Entity: Branch
+**Base URL:** `/api/branches`
+
+#### Endpoints:
+
+| Method | Endpoint | Description | Request Body | Response |
+|--------|----------|-------------|--------------|----------|
+| POST | `/api/branches` | Create new branch | `BranchRequest` | `Branch` |
+| GET | `/api/branches/{id}` | Get branch by ID | - | `Branch` |
+| PUT | `/api/branches/{id}` | Update branch | `BranchRequest` | `Branch` |
+| PATCH | `/api/branches/{id}` | Partial update branch | `BranchPatchRequest` | `Branch` |
+| GET | `/api/branches` | Get all branches (paginated) | Query params: `page`, `size`, `sortBy`, `direction`, `status` | `Page<Branch>` |
+| DELETE | `/api/branches/{id}` | Soft delete branch (set status to INACTIVE) | - | Success message |
+| GET | `/api/branches/exists/{name}` | Check if branch exists by name | - | `Boolean` |
+
+#### Data Structures:
+- **BranchRequest**: `{name: string, address: string, phone: string, status: string}`
+- **BranchPatchRequest**: `{name: string, address: string, phone: string, status: string}`
+- **Branch**: `{id: long, name: string, address: string, phone: string, status: string}`
+
+## 6. Currency Management Module
+
+### Entity: Currency
+**Base URL:** `/api/currencies`
+
+#### Endpoints:
+
+| Method | Endpoint | Description | Request Body | Response |
+|--------|----------|-------------|--------------|----------|
+| POST | `/api/currencies` | Create new currency | `CurrencyRequest` | `CurrencyResponse` |
+| GET | `/api/currencies/{id}` | Get currency by ID | - | `CurrencyResponse` |
+| PUT | `/api/currencies/{id}` | Update currency | `CurrencyRequest` | `CurrencyResponse` |
+| PATCH | `/api/currencies/{id}` | Partial update currency | `CurrencyPatchRequest` | `CurrencyResponse` |
+| GET | `/api/currencies` | Get all currencies (paginated) | Query params: `page`, `size`, `sortBy`, `direction`, `status` | `Page<CurrencyResponse>` |
+| DELETE | `/api/currencies/{id}` | Soft delete currency (set status to INACTIVE) | - | Success message |
+| GET | `/api/currencies/exists/{code}` | Check if currency exists by code | - | `Boolean` |
+
+#### Data Structures:
+- **CurrencyRequest**: `{code: string, name: string, symbol: string, decimalPlace: integer, status: string}`
+- **CurrencyPatchRequest**: `{code: string, name: string, symbol: string, decimalPlace: integer, status: string}`
+- **CurrencyResponse**: `{id: long, code: string, name: string, symbol: string, decimalPlace: integer, status: string}`
+
+## 7. Master Data Modules (Entities Without Controllers)
+
+Based on the repository files, the system includes these master entities that have repositories but no controllers implemented yet:
+
+### Entity: PaymentMethod
+**Table:** `m_payment_method`
+**Repository:** `PaymentMethodRepository`
+**Entity Structure:**
+```java
+{
+  id: Long,
+  code: String (unique, not null),
+  name: String,
+  status: String (default: "ACTIVE")
+}
+```
+**Note:** No REST endpoints implemented. Would need CRUD endpoints at `/api/payment-methods`
+
+### Entity: PaymentType
+**Table:** `m_payment_type`
+**Repository:** `PaymentTypeRepository`
+**Entity Structure:**
+```java
+{
+  id: Long,
+  code: String,
+  name: String
+}
+```
+**Note:** No REST endpoints implemented. Would need CRUD endpoints at `/api/payment-types`
+
+### Entity: Role
+**Table:** `m_role`
+**Repository:** `RoleRepository` (not found, but entity exists)
+**Entity Structure:**
+```java
+{
+  id: Long,
+  code: String (unique, not null),
+  name: String (not null),
+  description: String
+}
+```
+**Note:** No REST endpoints implemented. Would need CRUD endpoints at `/api/roles`
+
+### Entity: User
+**Table:** `m_user`
+**Repository:** `UserRepository`
+**Entity Structure:**
+```java
+{
+  id: Long,
+  username: String (unique, not null),
+  email: String (unique, not null),
+  password: String (not null),
+  role: Role (relationship),
+  branch: Branch (relationship),
+  status: String (default: "ACTIVE"),
+  createdAt: LocalDateTime
+}
+```
+**Note:** No REST endpoints implemented. Would need CRUD endpoints at `/api/users`
+
+### Entity: CfgLoan (Loan Configuration)
+**Table:** `cfg_loan`
+**Repository:** No repository found
+**Entity Structure:**
+```java
+{
+  id: Long,
+  branch: Branch (relationship),
+  currency: Currency (relationship),
+  minLoanAmount: BigDecimal,
+  maxLoanAmount: BigDecimal,
+  interestRate: BigDecimal,
+  interestType: String,
+  interestPeriod: String,
+  penaltyRate: BigDecimal,
+  penaltyGraceDays: Integer,
+  maxLoanDuration: Integer,
+  autoForfeitDays: Integer,
+  status: String,
+  effectiveFrom: LocalDate,
+  effectiveTo: LocalDate,
+  createdAt: LocalDateTime
+}
+```
+**Note:** No REST endpoints implemented. Would need CRUD endpoints at `/api/loan-configurations`
+
+### Entity: PawnForfeit
+**Table:** `pawn_forfeit`
+**Repository:** No repository found
+**Entity Structure:**
+```java
+{
+  id: Long,
+  pawnLoan: PawnLoan (one-to-one relationship),
+  forfeitDate: LocalDate,
+  note: String
+}
+```
+**Note:** No REST endpoints implemented. Would need CRUD endpoints at `/api/pawn-forfeits`
+
+## 8. Mock Data for Postman Testing
+
+### Customer Data Example:
+```json
+{
+  "fullName": "John Doe",
+  "phone": "+85512345678",
+  "idNumber": "123456789012",
+  "address": "Phnom Penh, Cambodia"
+}
+```
+
+### Pawn Item Data Example:
+```json
+{
+  "customerId": 1,
+  "itemType": "Gold Necklace",
+  "description": "24K gold necklace with pendant",
+  "estimatedValue": 1500.00,
+  "photoUrl": "https://example.com/photo.jpg"
+}
+```
+
+### Loan Data Example:
+```json
+{
+  "customerId": 1,
+  "pawnItemId": 1,
+  "currencyId": 1,
+  "branchId": 1,
+  "loanAmount": 1000.00,
+  "interestRate": 5.0,
+  "dueDate": "2024-12-31"
+}
+```
+
+### Repayment Data Example:
 ```json
 {
   "pawnLoanId": 1,
@@ -155,30 +308,7 @@ This document summarizes all REST API endpoints in the Loan Origination System, 
 }
 ```
 
-## 5. Branch Management Module
-
-### Entity: Branch
-**Base URL:** `/api/branches`
-
-#### Endpoints:
-
-| Method | Endpoint | Description | Request Body | Response |
-|--------|----------|-------------|--------------|----------|
-| POST | `/api/branches` | Create new branch | `BranchRequest` | `Branch` |
-| GET | `/api/branches/{id}` | Get branch by ID | - | `Branch` |
-| PUT | `/api/branches/{id}` | Update branch | `BranchRequest` | `Branch` |
-| PATCH | `/api/branches/{id}` | Partial update branch | `BranchPatchRequest` | `Branch` |
-| GET | `/api/branches` | Get all branches (paginated) | Query params: `page`, `size`, `sortBy`, `direction` | `Page<Branch>` |
-| GET | `/api/branches` | Get branches by status | Query params: `status`, `page`, `size` | `Page<Branch>` |
-| DELETE | `/api/branches/{id}` | Soft delete branch (set status to INACTIVE) | - | Success message |
-| GET | `/api/branches/exists/{name}` | Check if branch exists by name | - | `Boolean` |
-
-#### Data Structures:
-- **BranchRequest**: `{name: string, address: string, phone: string, status: string}`
-- **BranchPatchRequest**: `{name: string, address: string, phone: string, status: string}`
-- **Branch**: `{id: long, name: string, address: string, phone: string, status: string}`
-
-#### Mock Data Recommendations:
+### Branch Data Example:
 ```json
 {
   "name": "Phnom Penh Main Branch",
@@ -188,29 +318,7 @@ This document summarizes all REST API endpoints in the Loan Origination System, 
 }
 ```
 
-## 6. Currency Management Module
-
-### Entity: Currency
-**Base URL:** `/api/currencies`
-
-#### Endpoints:
-
-| Method | Endpoint | Description | Request Body | Response |
-|--------|----------|-------------|--------------|----------|
-| POST | `/api/currencies` | Create new currency | `CurrencyRequest` | `Currency` |
-| GET | `/api/currencies/{id}` | Get currency by ID | - | `Currency` |
-| PUT | `/api/currencies/{id}` | Update currency | `CurrencyRequest` | `Currency` |
-| PATCH | `/api/currencies/{id}` | Partial update currency | `CurrencyPatchRequest` | `Currency` |
-| GET | `/api/currencies` | Get all currencies (paginated) | Query params: `page`, `size`, `sortBy`, `direction`, `status` | `Page<Currency>` |
-| DELETE | `/api/currencies/{id}` | Soft delete currency (set status to INACTIVE) | - | Success message |
-| GET | `/api/currencies/exists/{code}` | Check if currency exists by code | - | `Boolean` |
-
-#### Data Structures:
-- **CurrencyRequest**: `{code: string, name: string, symbol: string, decimalPlace: integer, status: string}`
-- **CurrencyPatchRequest**: `{code: string, name: string, symbol: string, decimalPlace: integer, status: string}`
-- **Currency**: `{id: long, code: string, name: string, symbol: string, decimalPlace: integer, status: string}`
-
-#### Mock Data Recommendations:
+### Currency Data Example:
 ```json
 {
   "code": "USD",
@@ -221,59 +329,135 @@ This document summarizes all REST API endpoints in the Loan Origination System, 
 }
 ```
 
-## 7. Master Data Modules
+## 9. Testing Sequence for Postman
 
-Based on repository files, the system includes these master entities (controllers may not be implemented yet):
-- **PaymentMethod**: `PaymentMethodRepository`
-- **PaymentType**: `PaymentTypeRepository`
-- **User**: `UserRepository`
-- **Role**: `RoleRepository`
+### Recommended Testing Order:
+1. **Setup Master Data:**
+   - Create branches (`POST /api/branches`)
+   - Create currencies (`POST /api/currencies`)
+   - (If implemented) Create payment methods, payment types, roles, users
 
-These likely support dropdowns and reference data for the main modules.
+2. **Customer Flow:**
+   - Create customer (`POST /api/customers`)
+   - Get customer by ID (`GET /api/customers/{id}`)
+   - Update customer (`PUT /api/customers/{id}`)
+   - List customers (`GET /api/customers`)
 
-## Mock Data Preparation Guidelines
+   - List pawn items by customer (`GET /api/pawn-items/customer/{customerId}`)
+   - Update pawn item (`PUT /api/pawn-items/{id}`)
 
-### 1. Customer Data
-- Create 10-20 customers with realistic Cambodian names and ID numbers
-- Include mix of statuses: 70% ACTIVE, 20% INACTIVE, 10% DELETED
-- Ensure unique ID numbers
+4. **Loan Flow:**
+   - Create loan (`POST /api/pawn-loans`)
+   - Get loan by ID (`GET /api/pawn-loans/{id}`)
+   - Get loan by code (`GET /api/pawn-loans/code/{loanCode}`)
+   - List loans by customer (`GET /api/pawn-loans/customer/{customerId}`)
+   - Check if loan is overdue (`GET /api/pawn-loans/{id}/overdue`)
 
-### 2. Collateral Items
-- Create 15-30 pawn items across different customers
-- Item types: Gold jewelry, electronics, vehicles, documents
-- Status distribution: 40% AVAILABLE, 40% PAWNED, 10% REDEEMED, 10% FORFEITED
+5. **Repayment Flow:**
+   - Create repayment (`POST /api/pawn-repayments`)
+   - Get repayment history for a loan (`GET /api/pawn-repayments/loan/{loanId}`)
+   - Calculate repayment schedule (`GET /api/pawn-repayments/loan/{loanId}/schedule`)
+   - Get total paid amount (`GET /api/pawn-repayments/loan/{loanId}/total-paid`)
 
-### 3. Loans
-- Create 20-40 loans with realistic amounts (100-5000 USD equivalent)
-- Link to existing customers and collateral items
-- Include various statuses: ACTIVE, REDEEMED, DEFAULTED
-- Set realistic due dates (30-180 days from creation)
+6. **Reporting Flow:**
+   - Get repayments by date range (`GET /api/pawn-repayments/by-date`)
+   - Get daily collection report (`GET /api/pawn-repayments/daily-collection/{branchId}`)
+   - Get customer repayment summary (`GET /api/pawn-repayments/customer/{customerId}/summary/{months}`)
 
-### 4. Repayments
-- Create repayments for 60% of active loans
-- Include partial and full repayments
-- Create repayment schedules for testing
-- Include date ranges for reporting tests
+## 10. Postman Collection Structure
 
-### 5. Master Data
-- Create 3-5 branches (different locations)
-- Create 2-3 currencies (USD, KHR, THB)
-- Create 4-5 payment methods (Cash, Bank Transfer, Mobile Payment)
-- Create 3-4 payment types (Full, Partial, Interest Only)
-- Create 5-10 users with different roles
+### Recommended Folder Structure:
+1. **Master Data**
+   - Branches
+   - Currencies
+   - (If implemented) Payment Methods, Payment Types, Roles, Users
 
-## Testing Scenarios
+2. **Customer Management**
+   - Create Customer
+   - Get Customer
+   - Update Customer
+   - List Customers
 
-1. **Customer Registration Flow**: Create customer → verify creation → update details → check status
-2. **Loan Origination Flow**: Customer exists → collateral available → create loan → verify loan code
-3. **Repayment Flow**: Active loan → make repayment → verify totals → check remaining balance
-4. **Reporting Flow**: Date range queries → status filters → pagination tests
-5. **Business Rules**: Check collateral availability before loan, validate payment amounts, prevent duplicate ID numbers
+3. **Collateral Management**
+   - Create Pawn Item
+   - Get Pawn Item
+   - Update Pawn Item
+   - List Pawn Items
 
-## Notes for Mock Data Generation
+4. **Loan Management**
+   - Create Loan
+   - Get Loan
+   - Redeem Loan
+   - Default Loan
+   - List Loans
 
-1. Maintain referential integrity (customer IDs must exist before creating their loans)
-2. Respect business rules (can't create loan for deleted customer)
-3. Include edge cases: zero values, maximum amounts, date boundaries
-4. Create data for all status values to test filtering endpoints
-5. Generate realistic timestamps (createdAt, updatedAt) with logical sequences
+5. **Repayment Management**
+   - Create Repayment
+   - Get Repayment History
+   - Calculate Schedule
+   - Get Reports
+
+6. **Reporting**
+   - Date Range Reports
+   - Daily Collection
+   - Customer Summary
+
+## 11. Important Notes for Testing
+
+### Environment Variables:
+- Set base URL as environment variable: `{{baseUrl}}` = `http://localhost:8080`
+- Store created IDs (customerId, pawnItemId, loanId) as variables for chained requests
+
+### Authentication:
+- Currently no authentication implemented in controllers
+- If authentication is added later, include Authorization headers
+
+### Data Dependencies:
+- Customer must exist before creating pawn item
+- Pawn item must be AVAILABLE before creating loan
+- Loan must be ACTIVE before creating repayment
+- Branch and Currency must exist before creating loan
+
+### Error Handling:
+- Check for 400 Bad Request for validation errors
+- Check for 404 Not Found for non-existent resources
+- Check for 409 Conflict for duplicate data (unique constraints)
+
+## 12. Module Status Summary
+
+### Fully Implemented Modules (with Controllers):
+1. Customer Management ✓
+2. Pawn Item (Collateral) Management ✓
+3. Pawn Loan Management ✓
+4. Pawn Repayment Management ✓
+5. Branch Management ✓
+6. Currency Management ✓
+
+### Module Analysis - Entities Without Controllers:
+
+| Entity | Entity Status | Repository Status | Controller Status | Notes |
+|--------|---------------|-------------------|-------------------|-------|
+| **Loan Configuration (CfgLoan)** | Entity exists | No repository found | No controller | Configuration for loan parameters (interest rates, limits, etc.) |
+| **Payment Method** | Entity exists | Repository exists (`PaymentMethodRepository`) | No controller | Master data for payment methods (Cash, Bank Transfer, etc.) |
+| **Payment Type** | Entity exists | Repository exists (`PaymentTypeRepository`) | No controller | Master data for payment types (Full, Partial, Interest Only) |
+| **Role** | Entity exists | No repository found | No controller | User roles and permissions |
+| **User** | Entity exists | Repository exists (`UserRepository`) | No controller | System users with role and branch assignments |
+| **Pawn Forfeit** | Entity exists | No repository found | No controller | Records for forfeited loans |
+
+**Summary:**
+- 6 entities have data models but lack REST API endpoints
+- 3 entities have repositories (PaymentMethod, PaymentType, User)
+- 3 entities lack repositories (CfgLoan, Role, PawnForfeit)
+- All 6 entities need controller implementation for full CRUD operations
+
+### Next Steps for Complete System:
+1. Implement controllers for missing entities
+2. Add authentication and authorization
+3. Implement business logic for loan forfeiture
+4. Add more reporting endpoints
+5. Implement notification system
+
+---
+
+*Last Updated: 2026-02-23*
+*For Postman testing, import this document as reference and create collections accordingly.*
