@@ -1,27 +1,34 @@
 package com.example.loan_origination_system.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
+import com.example.loan_origination_system.dto.PawnLoanRequest;
 import com.example.loan_origination_system.exception.BusinessException;
+import com.example.loan_origination_system.mapper.LoanMapper;
 import com.example.loan_origination_system.model.enums.CollateralStatus;
+import com.example.loan_origination_system.model.enums.LoanEvent;
 import com.example.loan_origination_system.model.enums.LoanStatus;
 import com.example.loan_origination_system.model.loan.PawnItem;
 import com.example.loan_origination_system.model.loan.PawnLoan;
 import com.example.loan_origination_system.model.master.Branch;
 import com.example.loan_origination_system.model.master.Currency;
 import com.example.loan_origination_system.model.people.Customer;
-import com.example.loan_origination_system.repository.*;
+import com.example.loan_origination_system.repository.BranchRepository;
+import com.example.loan_origination_system.repository.CurrencyRepository;
+import com.example.loan_origination_system.repository.CustomerRepository;
+import com.example.loan_origination_system.repository.PawnItemRepository;
+import com.example.loan_origination_system.repository.PawnLoanRepository;
+
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +40,8 @@ public class PawnLoanService {
     private final BranchRepository branchRepository;
     private final CurrencyRepository currencyRepository;
     private final PawnItemService pawnItemService;
+    private final LoanStateMachine loanStateMachine;
+    private final LoanMapper loanMapper;
     
     /**
      * Create a new loan with comprehensive business logic
@@ -42,16 +51,19 @@ public class PawnLoanService {
      * 3. Change collateral status when loan created
      */
     @Transactional
-    public PawnLoan createLoan(PawnLoan loan) {
+    public PawnLoan createLoan(PawnLoanRequest request) {
+        // Convert DTO to entity (ignoring relationships)
+        PawnLoan loan = loanMapper.toPawnLoan(request);
+        
         // Validate customer exists
-        Customer customer = customerRepository.findById(loan.getCustomer().getId())
+        Customer customer = customerRepository.findById(request.getCustomerId())
             .orElseThrow(() -> new BusinessException("CUSTOMER_NOT_FOUND",
-                "Customer with ID " + loan.getCustomer().getId() + " not found"));
+                "Customer with ID " + request.getCustomerId() + " not found"));
         
         // Validate collateral exists and is available
-        PawnItem pawnItem = pawnItemRepository.findById(loan.getPawnItem().getId())
+        PawnItem pawnItem = pawnItemRepository.findById(request.getPawnItemId())
             .orElseThrow(() -> new BusinessException("COLLATERAL_NOT_FOUND",
-                "Collateral with ID " + loan.getPawnItem().getId() + " not found"));
+                "Collateral with ID " + request.getPawnItemId() + " not found"));
         
         if (pawnItem.getStatus() != CollateralStatus.AVAILABLE) {
             throw new BusinessException("COLLATERAL_NOT_AVAILABLE",
@@ -59,14 +71,14 @@ public class PawnLoanService {
         }
         
         // Validate branch exists
-        Branch branch = branchRepository.findById(loan.getBranch().getId())
+        Branch branch = branchRepository.findById(request.getBranchId())
             .orElseThrow(() -> new BusinessException("BRANCH_NOT_FOUND",
-                "Branch with ID " + loan.getBranch().getId() + " not found"));
+                "Branch with ID " + request.getBranchId() + " not found"));
         
         // Validate currency exists
-        Currency currency = currencyRepository.findById(loan.getCurrency().getId())
+        Currency currency = currencyRepository.findById(request.getCurrencyId())
             .orElseThrow(() -> new BusinessException("CURRENCY_NOT_FOUND",
-                "Currency with ID " + loan.getCurrency().getId() + " not found"));
+                "Currency with ID " + request.getCurrencyId() + " not found"));
         
         // Business Rule: principalAmount <= 70% of collateral estimatedValue
         BigDecimal maxLoanAmount = pawnItem.getEstimatedValue()
@@ -88,20 +100,21 @@ public class PawnLoanService {
         // Generate unique loan code
         String loanCode = generateLoanCode();
         
-        // Set loan properties
+        // Set loan properties (loan starts as CREATED)
         loan.setCustomer(customer);
         loan.setPawnItem(pawnItem);
         loan.setBranch(branch);
         loan.setCurrency(currency);
         loan.setLoanCode(loanCode);
         loan.setTotalPayableAmount(totalPayableAmount);
-        loan.setStatus(LoanStatus.ACTIVE);
+        // Status defaults to CREATED (set in entity)
         
-        // Update collateral status to PAWNED
-        pawnItem.setStatus(CollateralStatus.PAWNED);
-        pawnItemRepository.save(pawnItem);
+        // Save the loan first
+        PawnLoan savedLoan = pawnLoanRepository.save(loan);
         
-        return pawnLoanRepository.save(loan);
+        // Issue the loan using state machine (CREATED → ACTIVE)
+        // This will also update collateral status to PAWNED
+        return loanStateMachine.issueLoan(savedLoan.getId());
     }
     
     /**
@@ -178,16 +191,8 @@ public class PawnLoanService {
                 "Cannot redeem loan with ID " + id + " because it is not active. Current status: " + loan.getStatus());
         }
         
-        // Update loan status
-        loan.setStatus(LoanStatus.REDEEMED);
-        loan.setRedeemedAt(LocalDateTime.now());
-        
-        // Update collateral status to AVAILABLE
-        PawnItem pawnItem = loan.getPawnItem();
-        pawnItem.setStatus(CollateralStatus.AVAILABLE);
-        pawnItemRepository.save(pawnItem);
-        
-        return pawnLoanRepository.save(loan);
+        // Use state machine to redeem the loan (ACTIVE → REDEEMED)
+        return loanStateMachine.processFullPayment(id);
     }
     
     /**
@@ -202,41 +207,37 @@ public class PawnLoanService {
                 "Cannot mark loan with ID " + id + " as defaulted because it is not active. Current status: " + loan.getStatus());
         }
         
-        loan.setStatus(LoanStatus.DEFAULTED);
-        loan.setDefaultedAt(LocalDateTime.now());
-        
-        // Update collateral status to FORFEITED
-        PawnItem pawnItem = loan.getPawnItem();
-        pawnItem.setStatus(CollateralStatus.FORFEITED);
-        pawnItemRepository.save(pawnItem);
-        
-        return pawnLoanRepository.save(loan);
+        // Use state machine to mark as defaulted (ACTIVE → DEFAULTED)
+        return loanStateMachine.transition(id, LoanEvent.MANUAL_DEFAULT);
     }
     
     /**
      * Scheduled job to automatically mark overdue loans as defaulted
      * Business Rule: If past maturityDate → status DEFAULTED
+     *
+     * DEPRECATED: Replaced by LoanSchedulerService with two-step process
+     * (ACTIVE → OVERDUE → DEFAULTED)
      */
-    @Scheduled(cron = "0 0 0 * * ?") // Run daily at midnight
-    @Transactional
-    public void processOverdueLoans() {
-        LocalDate today = LocalDate.now();
-        List<PawnLoan> overdueLoans = pawnLoanRepository.findOverdueLoans(today);
-        
-        for (PawnLoan loan : overdueLoans) {
-            if (loan.getStatus() == LoanStatus.ACTIVE) {
-                loan.setStatus(LoanStatus.DEFAULTED);
-                loan.setDefaultedAt(LocalDateTime.now());
-                
-                // Update collateral status to FORFEITED
-                PawnItem pawnItem = loan.getPawnItem();
-                pawnItem.setStatus(CollateralStatus.FORFEITED);
-                pawnItemRepository.save(pawnItem);
-                
-                pawnLoanRepository.save(loan);
-            }
-        }
-    }
+    // @Scheduled(cron = "0 0 0 * * ?") // Run daily at midnight
+    // @Transactional
+    // public void processOverdueLoans() {
+    //     LocalDate today = LocalDate.now();
+    //     List<PawnLoan> overdueLoans = pawnLoanRepository.findOverdueLoans(today);
+    //
+    //     for (PawnLoan loan : overdueLoans) {
+    //         if (loan.getStatus() == LoanStatus.ACTIVE) {
+    //             loan.setStatus(LoanStatus.DEFAULTED);
+    //             loan.setDefaultedAt(LocalDateTime.now());
+    //
+    //             // Update collateral status to FORFEITED
+    //             PawnItem pawnItem = loan.getPawnItem();
+    //             pawnItem.setStatus(CollateralStatus.FORFEITED);
+    //             pawnItemRepository.save(pawnItem);
+    //
+    //             pawnLoanRepository.save(loan);
+    //         }
+    //     }
+    // }
     
     /**
      * Calculate total payable amount for a loan
