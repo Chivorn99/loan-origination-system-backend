@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import com.example.loan_origination_system.dto.PawnRepaymentRequest;
 import com.example.loan_origination_system.exception.BusinessException;
+import com.example.loan_origination_system.model.enums.LoanEvent;
 import com.example.loan_origination_system.model.enums.LoanStatus;
 import com.example.loan_origination_system.model.loan.PawnLoan;
 import com.example.loan_origination_system.model.loan.PawnRepayment;
@@ -41,6 +42,7 @@ public class PawnRepaymentService {
     private final PaymentMethodRepository paymentMethodRepository;
     private final PaymentTypeRepository paymentTypeRepository;
     private final UserRepository userRepository;
+    private final LoanStateMachine loanStateMachine;
     
     /**
      * Create a new repayment record
@@ -113,16 +115,15 @@ public class PawnRepaymentService {
         
         PawnRepayment savedRepayment = pawnRepaymentRepository.save(repayment);
         
-        // Update loan status based on payment
+        // Update loan status based on payment using state machine
         if (newTotalPaid.compareTo(totalPayable) >= 0) {
-            // Loan is fully paid
-            loan.setStatus(LoanStatus.REDEEMED);
-            loan.setRedeemedAt(LocalDateTime.now());
+            // Loan is fully paid - trigger FULL_PAYMENT event
+            loanStateMachine.transition(loan, LoanEvent.FULL_PAYMENT);
         } else if (newTotalPaid.compareTo(BigDecimal.ZERO) > 0) {
-            // Loan has partial payments
-            loan.setStatus(LoanStatus.PARTIALLY_PAID);
+            // Loan has partial payments - trigger PARTIAL_PAYMENT event
+            loanStateMachine.transition(loan, LoanEvent.PARTIAL_PAYMENT);
         }
-        pawnLoanRepository.save(loan);
+        // Note: If payment is zero (shouldn't happen due to validation), no state change
         
         return savedRepayment;
     }

@@ -22,6 +22,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Data;
 
 @Entity
@@ -31,6 +32,9 @@ public class PawnLoan {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Version
+    private Long version;
 
     @Column(unique = true, nullable = false)
     private String loanCode;
@@ -62,14 +66,16 @@ public class PawnLoan {
 
     private LocalDate loanDate = LocalDate.now();
     private LocalDate dueDate;
+    private LocalDate gracePeriodEndDate; // Date when grace period expires (overdue → defaulted)
 
     @Enumerated(EnumType.STRING)
-    private LoanStatus status = LoanStatus.PENDING;
+    private LoanStatus status = LoanStatus.CREATED;
     
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt;
     private LocalDateTime redeemedAt;
     private LocalDateTime defaultedAt;
+    private LocalDateTime overdueAt; // When loan was marked as overdue
     
     @PreUpdate
     protected void onUpdate() {

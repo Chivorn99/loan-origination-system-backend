@@ -7,7 +7,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import com.example.loan_origination_system.dto.PawnItemRequest;
 import com.example.loan_origination_system.exception.BusinessException;
+import com.example.loan_origination_system.mapper.LoanMapper;
 import com.example.loan_origination_system.model.enums.CollateralStatus;
 import com.example.loan_origination_system.model.loan.PawnItem;
 import com.example.loan_origination_system.model.people.Customer;
@@ -25,17 +27,20 @@ public class PawnItemService {
     private final PawnItemRepository pawnItemRepository;
     private final CustomerRepository customerRepository;
     private final PawnLoanRepository pawnLoanRepository;
+    private final LoanMapper loanMapper;
     
     /**
      * Create a new collateral item
      */
     @Transactional
-    public PawnItem createPawnItem(PawnItem pawnItem) {
+    public PawnItem createPawnItem(PawnItemRequest request) {
         // Validate customer exists
-        Customer customer = customerRepository.findById(pawnItem.getCustomer().getId())
+        Customer customer = customerRepository.findById(request.getCustomerId())
             .orElseThrow(() -> new BusinessException("CUSTOMER_NOT_FOUND",
-                "Customer with ID " + pawnItem.getCustomer().getId() + " not found"));
+                "Customer with ID " + request.getCustomerId() + " not found"));
         
+        // Convert DTO to entity
+        PawnItem pawnItem = loanMapper.toPawnItem(request);
         pawnItem.setCustomer(customer);
         
         // Set default status if not provided
@@ -51,7 +56,7 @@ public class PawnItemService {
      * Business Rule: Cannot modify collateral if it is already PAWNED
      */
     @Transactional
-    public PawnItem updatePawnItem(Long id, PawnItem pawnItemDetails) {
+    public PawnItem updatePawnItem(Long id, PawnItemRequest request) {
         PawnItem pawnItem = getPawnItemById(id);
         
         // Check if collateral is already pawned
@@ -60,11 +65,19 @@ public class PawnItemService {
                 "Cannot modify collateral with ID " + id + " because it is already pawned");
         }
         
-        // Update fields
-        pawnItem.setItemType(pawnItemDetails.getItemType());
-        pawnItem.setDescription(pawnItemDetails.getDescription());
-        pawnItem.setEstimatedValue(pawnItemDetails.getEstimatedValue());
-        pawnItem.setPhotoUrl(pawnItemDetails.getPhotoUrl());
+        // Update fields from request
+        if (request.getItemType() != null) {
+            pawnItem.setItemType(request.getItemType());
+        }
+        if (request.getDescription() != null) {
+            pawnItem.setDescription(request.getDescription());
+        }
+        if (request.getEstimatedValue() != null) {
+            pawnItem.setEstimatedValue(request.getEstimatedValue());
+        }
+        if (request.getPhotoUrl() != null) {
+            pawnItem.setPhotoUrl(request.getPhotoUrl());
+        }
         
         return pawnItemRepository.save(pawnItem);
     }
