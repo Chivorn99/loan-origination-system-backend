@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import com.example.loan_origination_system.dto.CurrencyPatchRequest;
 import com.example.loan_origination_system.dto.CurrencyRequest;
 import com.example.loan_origination_system.exception.BusinessException;
+import com.example.loan_origination_system.mapper.LoanMapper;
 import com.example.loan_origination_system.model.master.Currency;
 import com.example.loan_origination_system.repository.CurrencyRepository;
 
@@ -18,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 public class CurrencyService {
 
     private final CurrencyRepository currencyRepository;
+    private final LoanMapper loanMapper;
 
     /**
      * CREATE
@@ -32,12 +34,14 @@ public class CurrencyService {
             );
         }
 
-        Currency currency = new Currency();
-        currency.setCode(request.getCode());
-        currency.setName(request.getName());
-        currency.setSymbol(request.getSymbol());
-        currency.setDecimalPlace(request.getDecimalPlace() != null ? request.getDecimalPlace() : 2);
-        currency.setStatus(request.getStatus() != null ? request.getStatus() : "ACTIVE");
+        Currency currency = loanMapper.toCurrency(request);
+        // Set default values if not provided in request
+        if (currency.getDecimalPlace() == null) {
+            currency.setDecimalPlace(2);
+        }
+        if (currency.getStatus() == null) {
+            currency.setStatus("ACTIVE");
+        }
 
         return currencyRepository.save(currency);
     }
@@ -58,25 +62,10 @@ public class CurrencyService {
                         "Currency with this code already exists"
                 );
             }
-            currency.setCode(request.getCode());
         }
 
-        // Update other fields if provided
-        if (request.getName() != null) {
-            currency.setName(request.getName());
-        }
-
-        if (request.getSymbol() != null) {
-            currency.setSymbol(request.getSymbol());
-        }
-
-        if (request.getDecimalPlace() != null) {
-            currency.setDecimalPlace(request.getDecimalPlace());
-        }
-
-        if (request.getStatus() != null) {
-            currency.setStatus(request.getStatus());
-        }
+        // Use mapper to update entity
+        loanMapper.updateCurrencyFromRequest(request, currency);
 
         return currencyRepository.save(currency);
     }

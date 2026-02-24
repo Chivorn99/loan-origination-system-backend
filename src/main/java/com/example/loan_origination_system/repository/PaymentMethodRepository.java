@@ -7,4 +7,5 @@ import com.example.loan_origination_system.model.master.PaymentMethod;
 
 @Repository
 public interface PaymentMethodRepository extends JpaRepository<PaymentMethod, Long> {
+    boolean existsByCode(String code);
 }

@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.loan_origination_system.dto.ApiResponse;
 import com.example.loan_origination_system.dto.CurrencyPatchRequest;
 import com.example.loan_origination_system.dto.CurrencyRequest;
+import com.example.loan_origination_system.dto.CurrencyResponse;
+import com.example.loan_origination_system.mapper.LoanMapper;
 import com.example.loan_origination_system.model.master.Currency;
 import com.example.loan_origination_system.service.CurrencyService;
 
@@ -31,28 +33,32 @@ import lombok.RequiredArgsConstructor;
 public class CurrencyController {
 
     private final CurrencyService currencyService;
+    private final LoanMapper loanMapper;
 
     /**
      * Create currency
      */
     @PostMapping
-    public ResponseEntity<ApiResponse<Currency>> createCurrency(
+    public ResponseEntity<ApiResponse<CurrencyResponse>> createCurrency(
             @Valid @RequestBody CurrencyRequest request) {
 
         Currency currency = currencyService.createCurrency(request);
+        CurrencyResponse response = loanMapper.toCurrencyResponse(currency);
 
         return ResponseEntity
                 .status(201)
-                .body(ApiResponse.success("Currency created successfully", currency));
+                .body(ApiResponse.success("Currency created successfully", response));
     }
 
     /**
      * Get currency by ID
      */
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<Currency>> getCurrency(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<CurrencyResponse>> getCurrency(@PathVariable Long id) {
+        Currency currency = currencyService.getCurrencyById(id);
+        CurrencyResponse response = loanMapper.toCurrencyResponse(currency);
         return ResponseEntity.ok(
-                ApiResponse.success(currencyService.getCurrencyById(id))
+                ApiResponse.success(response)
         );
     }
 
@@ -60,14 +66,15 @@ public class CurrencyController {
      * Update currency (FULL UPDATE)
      */
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<Currency>> updateCurrency(
+    public ResponseEntity<ApiResponse<CurrencyResponse>> updateCurrency(
             @PathVariable Long id,
             @Valid @RequestBody CurrencyRequest request) {
 
         Currency updatedCurrency = currencyService.updateCurrency(id, request);
+        CurrencyResponse response = loanMapper.toCurrencyResponse(updatedCurrency);
 
         return ResponseEntity.ok(
-                ApiResponse.success("Currency updated successfully", updatedCurrency)
+                ApiResponse.success("Currency updated successfully", response)
         );
     }
 
@@ -75,14 +82,15 @@ public class CurrencyController {
      * Partial update (PATCH)
      */
     @PatchMapping("/{id}")
-    public ResponseEntity<ApiResponse<Currency>> patchCurrency(
+    public ResponseEntity<ApiResponse<CurrencyResponse>> patchCurrency(
             @PathVariable Long id,
             @RequestBody CurrencyPatchRequest request) {
 
         Currency updatedCurrency = currencyService.patchCurrency(id, request);
+        CurrencyResponse response = loanMapper.toCurrencyResponse(updatedCurrency);
 
         return ResponseEntity.ok(
-                ApiResponse.success("Currency updated successfully", updatedCurrency)
+                ApiResponse.success("Currency updated successfully", response)
         );
     }
 
@@ -94,7 +102,7 @@ public class CurrencyController {
      * GET /api/currencies?status=ACTIVE
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<Currency>>> getCurrencies(
+    public ResponseEntity<ApiResponse<Page<CurrencyResponse>>> getCurrencies(
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -113,7 +121,9 @@ public class CurrencyController {
                 ? currencyService.getAllCurrencies(pageable)
                 : currencyService.getCurrenciesByStatus(status, pageable);
 
-        return ResponseEntity.ok(ApiResponse.success(currencies));
+        Page<CurrencyResponse> response = currencies.map(loanMapper::toCurrencyResponse);
+
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /**
