@@ -1,0 +1,54 @@
+
+
+services:
+  # Spring Boot Application (using external Supabase database)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: loan-app
+    env_file:
+      - .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-default}
+      - SERVER_PORT=8080
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  # ===========================================
+  # LOCAL DEVELOPMENT ONLY (Optional)
+  # Uncomment below if you want local PostgreSQL
+  # ===========================================
+  # postgres:
+  #   image: postgres:16
+  #   container_name: loan-postgres
+  #   environment:
+  #     POSTGRES_DB: loan_db
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # PgAdmin for database management (optional)
+  # pgadmin:
+  #   image: dpage/pgadmin4:latest
+  #   container_name: loan-pgadmin
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: admin@admin.com
+  #     PGADMIN_DEFAULT_PASSWORD: admin
+  #   ports:
+  #     - "5050:80"
+  #   depends_on:
+  #     - postgres
+
+# volumes:
+#   postgres_data:
+
