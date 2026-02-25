@@ -104,18 +104,15 @@ jobs:
       url: https://staging.example.com
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Deploy to Staging
+      - name: Trigger Railway deploy hook (staging)
+        env:
+          RAILWAY_DEPLOY_HOOK_STAGING: ${{ secrets.RAILWAY_DEPLOY_HOOK_STAGING }}
         run: |
-          echo "Deploying to staging environment..."
-          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          # Add your deployment commands here
-          # Examples:
-          # - kubectl apply -f k8s/staging/
-          # - docker-compose -f docker-compose.staging.yml up -d
-          # - ssh staging-server 'docker pull ... && docker-compose up -d'
+          if [ -z "$RAILWAY_DEPLOY_HOOK_STAGING" ]; then
+            echo "RAILWAY_DEPLOY_HOOK_STAGING is not set" >&2
+            exit 1
+          fi
+          curl -fsS -X POST "$RAILWAY_DEPLOY_HOOK_STAGING"
 
   # Deploy to Production (manual approval required)
   deploy-production:
@@ -128,12 +125,12 @@ jobs:
       url: https://example.com
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Deploy to Production
+      - name: Trigger Railway deploy hook (production)
+        env:
+          RAILWAY_DEPLOY_HOOK_PROD: ${{ secrets.RAILWAY_DEPLOY_HOOK_PROD }}
         run: |
-          echo "Deploying to production environment..."
-          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          # Add your production deployment commands here
-
+          if [ -z "$RAILWAY_DEPLOY_HOOK_PROD" ]; then
+            echo "RAILWAY_DEPLOY_HOOK_PROD is not set" >&2
+            exit 1
+          fi
+          curl -fsS -X POST "$RAILWAY_DEPLOY_HOOK_PROD"
