@@ -29,6 +29,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      attestations: write
+      id-token: write
 
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
@@ -40,7 +42,10 @@ jobs:
 
       - name: Set image name to lowercase
         id: image-name
-        run: echo "IMAGE_NAME=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+        run: |
+          IMAGE_NAME=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+          echo "Using image name: $IMAGE_NAME"
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -74,16 +79,21 @@ jobs:
 
       - name: Build and Push with Jib
         id: build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./mvnw compile jib:build \
             -Djib.to.image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             -Djib.to.auth.username=${{ github.actor }} \
             -Djib.to.auth.password=${{ secrets.GITHUB_TOKEN }} \
             -Djib.to.tags=latest,${{ github.ref_name }} \
+            -Djib.httpTimeout=60000 \
+            -Djib.container.creationTime=USE_CURRENT_TIMESTAMP \
             -B
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
+        continue-on-error: true
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: spdx-json
@@ -91,6 +101,7 @@ jobs:
 
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: sbom
           path: sbom.spdx.json
