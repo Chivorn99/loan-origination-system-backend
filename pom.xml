@@ -221,7 +221,7 @@
 		<profile>
 			<id>ghcr</id>
 			<properties>
-				<docker.image.name>ghcr.io/Chivorn99/loan-origination-system</docker.image.name>
+				<docker.image.name>ghcr.io/chivorn99/loan-origination-system</docker.image.name>
 				<docker.image.tag>${project.version}</docker.image.tag>
 			</properties>
 		</profile>
