@@ -20,7 +20,6 @@ env:
   JAVA_VERSION: '21'
   JAVA_DISTRIBUTION: 'temurin'
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   # Build and Push Docker Image using Jib
@@ -38,6 +37,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set image name to lowercase
+        id: image-name
+        run: echo "IMAGE_NAME=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
