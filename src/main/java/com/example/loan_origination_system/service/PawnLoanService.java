@@ -3,6 +3,7 @@ package com.example.loan_origination_system.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,8 +17,10 @@ import com.example.loan_origination_system.mapper.LoanMapper;
 import com.example.loan_origination_system.model.enums.CollateralStatus;
 import com.example.loan_origination_system.model.enums.LoanEvent;
 import com.example.loan_origination_system.model.enums.LoanStatus;
+import com.example.loan_origination_system.model.enums.PaymentFrequency;
 import com.example.loan_origination_system.model.loan.PawnItem;
 import com.example.loan_origination_system.model.loan.PawnLoan;
+import com.example.loan_origination_system.model.loan.PaymentScheduleItem;
 import com.example.loan_origination_system.model.master.Branch;
 import com.example.loan_origination_system.model.master.Currency;
 import com.example.loan_origination_system.model.people.Customer;
@@ -91,11 +94,72 @@ public class PawnLoanService {
                     loan.getLoanAmount(), maxLoanAmount, pawnItem.getEstimatedValue()));
         }
         
-        // Calculate total payable amount (principal + interest)
+        // Calculate due date from loan duration if not provided
+        if (loan.getDueDate() == null && loan.getLoanDurationDays() != null) {
+            LocalDate dueDate = loan.getLoanDate() != null ?
+                loan.getLoanDate().plusDays(loan.getLoanDurationDays()) :
+                LocalDate.now().plusDays(loan.getLoanDurationDays());
+            loan.setDueDate(dueDate);
+        }
+        
+        // Validate interest rate is not null before calculation
+        if (loan.getInterestRate() == null) {
+            throw new BusinessException("INTEREST_RATE_REQUIRED", "Interest rate is required for loan calculation");
+        }
+        
+        // Calculate total payable amount (principal + interest + storage fee)
         BigDecimal interestAmount = loan.getLoanAmount()
             .multiply(loan.getInterestRate().divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
-        BigDecimal totalPayableAmount = loan.getLoanAmount().add(interestAmount)
+        
+        BigDecimal storageFee = loan.getStorageFee() != null ? loan.getStorageFee() : BigDecimal.ZERO;
+        BigDecimal totalPayableAmount = loan.getLoanAmount()
+            .add(interestAmount)
+            .add(storageFee)
             .setScale(2, RoundingMode.HALF_UP);
+        
+        // Set redemption deadline if not provided (due date + grace period)
+        if (loan.getRedemptionDeadline() == null && loan.getDueDate() != null && loan.getGracePeriodDays() != null) {
+            LocalDate redemptionDeadline = loan.getDueDate().plusDays(loan.getGracePeriodDays());
+            loan.setRedemptionDeadline(redemptionDeadline);
+        }
+        
+        // Calculate installment amount if not provided for installment payments
+        if (loan.getPaymentFrequency() != null &&
+            loan.getPaymentFrequency() != PaymentFrequency.ONE_TIME &&
+            loan.getNumberOfInstallments() != null &&
+            loan.getNumberOfInstallments() > 1 &&
+            loan.getInstallmentAmount() == null) {
+            
+            // Calculate equal installments including interest
+            BigDecimal installmentAmount = totalPayableAmount
+                .divide(new BigDecimal(loan.getNumberOfInstallments()), 2, RoundingMode.HALF_UP);
+            loan.setInstallmentAmount(installmentAmount);
+        }
+        
+        // Set default values if not provided
+        if (loan.getLoanDurationDays() == null) {
+            loan.setLoanDurationDays(30); // Default 30 days
+        }
+        
+        if (loan.getGracePeriodDays() == null) {
+            loan.setGracePeriodDays(7); // Default 7 days grace period
+        }
+        
+        if (loan.getPenaltyRate() == null) {
+            loan.setPenaltyRate(BigDecimal.ZERO);
+        }
+        
+        if (loan.getStorageFee() == null) {
+            loan.setStorageFee(BigDecimal.ZERO);
+        }
+        
+        if (loan.getPaymentFrequency() == null) {
+            loan.setPaymentFrequency(PaymentFrequency.ONE_TIME);
+        }
+        
+        if (loan.getNumberOfInstallments() == null) {
+            loan.setNumberOfInstallments(1);
+        }
         
         // Generate unique loan code
         String loanCode = generateLoanCode();
@@ -243,6 +307,12 @@ public class PawnLoanService {
      * Calculate total payable amount for a loan
      */
     public BigDecimal calculateTotalPayableAmount(BigDecimal principalAmount, BigDecimal interestRate) {
+        if (principalAmount == null) {
+            throw new IllegalArgumentException("Principal amount cannot be null");
+        }
+        if (interestRate == null) {
+            throw new IllegalArgumentException("Interest rate cannot be null");
+        }
         BigDecimal interestAmount = principalAmount
             .multiply(interestRate.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
         return principalAmount.add(interestAmount).setScale(2, RoundingMode.HALF_UP);
@@ -256,6 +326,95 @@ public class PawnLoanService {
             return false;
         }
         return loan.getDueDate().isBefore(LocalDate.now());
+    }
+    
+    /**
+     * Generate payment schedule for a loan
+     * Creates a list of installments from 1st payment to last payment
+     */
+    public List<PaymentScheduleItem> generatePaymentSchedule(PawnLoan loan) {
+        List<PaymentScheduleItem> schedule = new ArrayList<>();
+        
+        if (loan.getPaymentFrequency() == PaymentFrequency.ONE_TIME ||
+            loan.getNumberOfInstallments() == null || loan.getNumberOfInstallments() <= 1) {
+            // One-time payment
+            PaymentScheduleItem item = new PaymentScheduleItem(
+                1,
+                loan.getDueDate(),
+                loan.getTotalPayableAmount(),
+                loan.getLoanAmount(),
+                loan.getTotalPayableAmount().subtract(loan.getLoanAmount()),
+                BigDecimal.ZERO
+            );
+            schedule.add(item);
+            return schedule;
+        }
+        
+        // Installment payments
+        int numberOfInstallments = loan.getNumberOfInstallments();
+        if (numberOfInstallments <= 0) {
+            throw new IllegalArgumentException("Number of installments must be greater than 0");
+        }
+        
+        BigDecimal installmentAmount = loan.getInstallmentAmount();
+        if (installmentAmount == null) {
+            // Calculate equal installments
+            installmentAmount = loan.getTotalPayableAmount()
+                .divide(new BigDecimal(numberOfInstallments), 2, RoundingMode.HALF_UP);
+        }
+        
+        BigDecimal remainingBalance = loan.getTotalPayableAmount();
+        LocalDate currentDueDate = loan.getLoanDate() != null ? loan.getLoanDate() : LocalDate.now();
+        
+        // Calculate interest per installment (simple interest distributed equally)
+        BigDecimal totalInterest = loan.getTotalPayableAmount().subtract(loan.getLoanAmount());
+        BigDecimal interestPerInstallment = totalInterest.divide(
+            new BigDecimal(numberOfInstallments), 2, RoundingMode.HALF_UP);
+        
+        // Calculate principal per installment
+        BigDecimal principalPerInstallment = loan.getLoanAmount().divide(
+            new BigDecimal(numberOfInstallments), 2, RoundingMode.HALF_UP);
+        
+        for (int i = 1; i <= numberOfInstallments; i++) {
+            // Calculate due date based on payment frequency
+            LocalDate dueDate = calculateNextDueDate(currentDueDate, loan.getPaymentFrequency(), i);
+            
+            // Update remaining balance
+            remainingBalance = remainingBalance.subtract(installmentAmount);
+            if (remainingBalance.compareTo(BigDecimal.ZERO) < 0) {
+                remainingBalance = BigDecimal.ZERO;
+            }
+            
+            PaymentScheduleItem item = new PaymentScheduleItem(
+                i,
+                dueDate,
+                installmentAmount,
+                principalPerInstallment,
+                interestPerInstallment,
+                remainingBalance
+            );
+            schedule.add(item);
+        }
+        
+        return schedule;
+    }
+    
+    /**
+     * Calculate next due date based on payment frequency
+     */
+    private LocalDate calculateNextDueDate(LocalDate startDate, PaymentFrequency frequency, int installmentNumber) {
+        switch (frequency) {
+            case WEEKLY:
+                return startDate.plusWeeks(installmentNumber);
+            case BI_WEEKLY:
+                return startDate.plusWeeks(installmentNumber * 2);
+            case MONTHLY:
+                return startDate.plusMonths(installmentNumber);
+            case QUARTERLY:
+                return startDate.plusMonths(installmentNumber * 3);
+            default:
+                return startDate.plusDays(installmentNumber * 30); // Default monthly
+        }
     }
     
     /**

@@ -20,6 +20,7 @@ import com.example.loan_origination_system.dto.ApiResponse;
 import com.example.loan_origination_system.dto.PawnLoanRequest;
 import com.example.loan_origination_system.model.enums.LoanStatus;
 import com.example.loan_origination_system.model.loan.PawnLoan;
+import com.example.loan_origination_system.model.loan.PaymentScheduleItem;
 import com.example.loan_origination_system.service.PawnLoanService;
 
 import jakarta.validation.Valid;
@@ -153,6 +154,18 @@ public class PawnLoanController {
         // Note: In a real implementation, you would use BigDecimal
         Double totalPayable = principalAmount * (1 + interestRate / 100);
         return ResponseEntity.ok(ApiResponse.success(totalPayable));
+    }
+    
+    /**
+     * Get payment schedule for a loan
+     * Lists 1st payment, 2nd payment, until last payment
+     * GET /api/pawn-loans/{id}/payment-schedule
+     */
+    @GetMapping("/{id}/payment-schedule")
+    public ResponseEntity<ApiResponse<List<PaymentScheduleItem>>> getPaymentSchedule(@PathVariable Long id) {
+        PawnLoan loan = pawnLoanService.getLoanById(id);
+        List<PaymentScheduleItem> schedule = pawnLoanService.generatePaymentSchedule(loan);
+        return ResponseEntity.ok(ApiResponse.success("Payment schedule retrieved successfully", schedule));
     }
     
     /**
