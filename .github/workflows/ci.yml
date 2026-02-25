@@ -44,7 +44,7 @@ jobs:
 
       - name: Run Tests
         run: ./mvnw test -B
-        continue-on-error: true
+        # Tests will fail the build - remove continue-on-error to enforce test quality
 
       - name: Package Application
         run: ./mvnw package -DskipTests -B
@@ -56,11 +56,11 @@ jobs:
           path: target/*.jar
           retention-days: 7
 
-  # Code Quality Job (optional - runs in parallel)
+  # Code Quality Job (runs in parallel with build)
   code-quality:
     name: Code Quality
     runs-on: ubuntu-latest
-    continue-on-error: true
+    continue-on-error: true  # Don't block builds, but report issues
 
     steps:
       - name: Checkout code
@@ -76,8 +76,24 @@ jobs:
       - name: Make Maven Wrapper executable
         run: chmod +x ./mvnw
 
-      - name: Run Checkstyle (if configured)
-        run: ./mvnw checkstyle:check -B || true
+      - name: Run Checkstyle
+        run: ./mvnw checkstyle:check -B
 
-      - name: Run SpotBugs (if configured)
-        run: ./mvnw spotbugs:check -B || true
+      - name: Run SpotBugs
+        run: ./mvnw compile spotbugs:check -B
+
+      - name: Upload Checkstyle Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checkstyle-report
+          path: target/checkstyle-result.xml
+          retention-days: 7
+
+      - name: Upload SpotBugs Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spotbugs-report
+          path: target/spotbugsXml.xml
+          retention-days: 7
