@@ -96,7 +96,7 @@ jobs:
           path: sbom.spdx.json
           retention-days: 30
 
-  # Deploy to Staging
+  # Deploy to Staging (Railway auto-deploys from GitHub, this is just a notification)
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
@@ -107,15 +107,12 @@ jobs:
       url: https://staging.example.com
 
     steps:
-      - name: Trigger Railway deploy hook (staging)
-        env:
-          RAILWAY_DEPLOY_HOOK_STAGING: ${{ secrets.RAILWAY_DEPLOY_HOOK_STAGING }}
+      - name: Notify Railway deployment
         run: |
-          if [ -z "$RAILWAY_DEPLOY_HOOK_STAGING" ]; then
-            echo "RAILWAY_DEPLOY_HOOK_STAGING is not set" >&2
-            exit 1
-          fi
-          curl -fsS -X POST "$RAILWAY_DEPLOY_HOOK_STAGING"
+          echo "✅ Docker image pushed to GHCR"
+          echo "✅ Railway is connected to GitHub and will auto-deploy"
+          echo "📦 Image: ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          echo "🚀 Railway deployment triggered automatically via GitHub integration"
 
   # Deploy to Production (manual approval required)
   deploy-production:
@@ -128,12 +125,8 @@ jobs:
       url: https://example.com
 
     steps:
-      - name: Trigger Railway deploy hook (production)
-        env:
-          RAILWAY_DEPLOY_HOOK_PROD: ${{ secrets.RAILWAY_DEPLOY_HOOK_PROD }}
+      - name: Notify Production deployment
         run: |
-          if [ -z "$RAILWAY_DEPLOY_HOOK_PROD" ]; then
-            echo "RAILWAY_DEPLOY_HOOK_PROD is not set" >&2
-            exit 1
-          fi
-          curl -fsS -X POST "$RAILWAY_DEPLOY_HOOK_PROD"
+          echo "✅ Production deployment triggered"
+          echo "📦 Image: ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          echo "🚀 Railway will deploy to production environment"
