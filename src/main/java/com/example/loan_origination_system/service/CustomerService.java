@@ -1,125 +1,173 @@
 package com.example.loan_origination_system.service;
 
+import java.time.LocalDateTime;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
+import com.example.loan_origination_system.dto.CustomerPatchRequest;
+import com.example.loan_origination_system.dto.CustomerRequest;
 import com.example.loan_origination_system.exception.BusinessException;
 import com.example.loan_origination_system.model.enums.CustomerStatus;
 import com.example.loan_origination_system.model.people.Customer;
 import com.example.loan_origination_system.repository.CustomerRepository;
 import com.example.loan_origination_system.repository.PawnLoanRepository;
+
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-
-import java.time.LocalDateTime;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class CustomerService {
-    
+
     private final CustomerRepository customerRepository;
     private final PawnLoanRepository pawnLoanRepository;
-    
+
     /**
-     * Create a new customer with business validation
-     * Business Rule: nationalId must be unique
+     * CREATE
      */
     @Transactional
-    public Customer createCustomer(Customer customer) {
-        // Validate nationalId uniqueness
-        if (customerRepository.existsByIdNumber(customer.getIdNumber())) {
-            throw new BusinessException("CUSTOMER_ID_DUPLICATE", 
-                "Customer with national ID " + customer.getIdNumber() + " already exists");
+    public Customer createCustomer(CustomerRequest request) {
+
+        if (customerRepository.existsByIdNumber(request.getIdNumber())) {
+            throw new BusinessException(
+                    "CUSTOMER_ID_DUPLICATE",
+                    "Customer with national ID already exists"
+            );
         }
-        
-        // Set default status if not provided
-        if (customer.getStatus() == null) {
-            customer.setStatus(CustomerStatus.ACTIVE);
-        }
-        
+
+        Customer customer = new Customer();
+        customer.setFullName(request.getFullName());
+        customer.setPhone(request.getPhone());
+        customer.setIdNumber(request.getIdNumber());
+        customer.setAddress(request.getAddress());
+        customer.setStatus(CustomerStatus.ACTIVE);
+
         return customerRepository.save(customer);
     }
-    
+
     /**
-     * Update customer information
+     * FULL UPDATE (PUT) — NOW EDITABLE / NULL SAFE
      */
     @Transactional
-    public Customer updateCustomer(Long id, Customer customerDetails) {
+    public Customer updateCustomer(Long id, CustomerRequest request) {
+
         Customer customer = getCustomerById(id);
-        
-        // Check if nationalId is being changed and validate uniqueness
-        if (!customer.getIdNumber().equals(customerDetails.getIdNumber())) {
-            if (customerRepository.existsByIdNumber(customerDetails.getIdNumber())) {
-                throw new BusinessException("CUSTOMER_ID_DUPLICATE",
-                    "Customer with national ID " + customerDetails.getIdNumber() + " already exists");
+
+        // ✅ Only validate ID number IF provided AND changed
+        if (request.getIdNumber() != null &&
+                !request.getIdNumber().equals(customer.getIdNumber())) {
+
+            if (customerRepository.existsByIdNumberAndIdNot(
+                    request.getIdNumber(), id)) {
+
+                throw new BusinessException(
+                        "CUSTOMER_ID_DUPLICATE",
+                        "Customer with national ID already exists"
+                );
             }
-            customer.setIdNumber(customerDetails.getIdNumber());
+
+            customer.setIdNumber(request.getIdNumber());
         }
-        
-        // Update other fields
-        customer.setFullName(customerDetails.getFullName());
-        customer.setPhone(customerDetails.getPhone());
-        customer.setAddress(customerDetails.getAddress());
-        
+
+        // ✅ Editable fields (only update if provided)
+        if (request.getFullName() != null) {
+            customer.setFullName(request.getFullName());
+        }
+
+        if (request.getPhone() != null) {
+            customer.setPhone(request.getPhone());
+        }
+
+        if (request.getAddress() != null) {
+            customer.setAddress(request.getAddress());
+        }
+
         return customerRepository.save(customer);
     }
-    
+
     /**
-     * Get customer by ID
+     * PARTIAL UPDATE (PATCH)
+     */
+    @Transactional
+    public Customer patchCustomer(Long id, CustomerPatchRequest patch) {
+
+        Customer customer = getCustomerById(id);
+
+        if (patch.getFullName() != null)
+            customer.setFullName(patch.getFullName());
+
+        if (patch.getPhone() != null)
+            customer.setPhone(patch.getPhone());
+
+        if (patch.getAddress() != null)
+            customer.setAddress(patch.getAddress());
+
+        if (patch.getIdNumber() != null &&
+                !patch.getIdNumber().equals(customer.getIdNumber())) {
+
+            if (customerRepository.existsByIdNumberAndIdNot(
+                    patch.getIdNumber(), id)) {
+
+                throw new BusinessException(
+                        "CUSTOMER_ID_DUPLICATE",
+                        "Customer with national ID already exists"
+                );
+            }
+
+            customer.setIdNumber(patch.getIdNumber());
+        }
+
+        return customerRepository.save(customer);
+    }
+
+    /**
+     * READ METHODS
      */
     public Customer getCustomerById(Long id) {
         return customerRepository.findById(id)
-            .orElseThrow(() -> new BusinessException("CUSTOMER_NOT_FOUND", 
-                "Customer with ID " + id + " not found"));
+                .orElseThrow(() -> new BusinessException(
+                        "CUSTOMER_NOT_FOUND",
+                        "Customer not found"
+                ));
     }
-    
-    /**
-     * Get customer by national ID
-     */
+
     public Customer getCustomerByIdNumber(String idNumber) {
         return customerRepository.findByIdNumber(idNumber)
-            .orElseThrow(() -> new BusinessException("CUSTOMER_NOT_FOUND", 
-                "Customer with national ID " + idNumber + " not found"));
+                .orElseThrow(() -> new BusinessException(
+                        "CUSTOMER_NOT_FOUND",
+                        "Customer not found"
+                ));
     }
-    
-    /**
-     * Get all customers with pagination (excluding deleted)
-     */
-    public Page<Customer> getAllCustomers(Pageable pageable) {
-        return customerRepository.findAllActive(pageable);
+
+    public Page<Customer> getCustomers(CustomerStatus status, Pageable pageable) {
+        return (status == null)
+                ? customerRepository.findAllActive(pageable)
+                : customerRepository.findByStatus(status, pageable);
     }
-    
+
     /**
-     * Soft delete customer
-     * Business Rule: Cannot delete customer if they have ACTIVE loans
+     * SOFT DELETE
      */
     @Transactional
     public void deleteCustomer(Long id) {
+
         Customer customer = getCustomerById(id);
-        
-        // Check if customer has active loans
+
         if (pawnLoanRepository.existsActiveLoanByCustomerId(id)) {
-            throw new BusinessException("CUSTOMER_HAS_ACTIVE_LOANS",
-                "Cannot delete customer with ID " + id + " because they have active loans");
+            throw new BusinessException(
+                    "CUSTOMER_HAS_ACTIVE_LOANS",
+                    "Cannot delete customer with active loans"
+            );
         }
-        
-        // Soft delete
+
         customer.setStatus(CustomerStatus.DELETED);
         customer.setDeletedAt(LocalDateTime.now());
+
         customerRepository.save(customer);
     }
-    
-    /**
-     * Get customers by status with pagination
-     */
-    public Page<Customer> getCustomersByStatus(CustomerStatus status, Pageable pageable) {
-        return customerRepository.findByStatus(status, pageable);
-    }
-    
-    /**
-     * Check if customer has active loans
-     */
+
     public boolean hasActiveLoans(Long customerId) {
         return pawnLoanRepository.existsActiveLoanByCustomerId(customerId);
     }

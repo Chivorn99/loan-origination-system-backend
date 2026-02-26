@@ -1,0 +1,193 @@
+// Loan Origination System Database Schema
+// Generated from Java entity classes
+
+// Enums
+Enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  DELETED
+}
+
+Enum CollateralStatus {
+  AVAILABLE
+  PAWNED
+  REDEEMED
+  FORFEITED
+  DELETED
+}
+
+Enum LoanStatus {
+  PENDING
+  ACTIVE
+  REDEEMED
+  DEFAULTED
+  FORFEITED
+  CANCELLED
+}
+
+// Master Tables
+Table m_branch {
+  id bigint [pk, increment]
+  name varchar [not null]
+  address varchar
+  phone varchar
+  status varchar [default: 'ACTIVE']
+}
+
+Table m_currency {
+  id bigint [pk, increment]
+  code varchar [not null, unique]
+  name varchar
+  symbol varchar
+  decimal_place integer [default: 2]
+  status varchar [default: 'ACTIVE']
+}
+
+Table m_role {
+  id bigint [pk, increment]
+  code varchar [not null, unique]
+  name varchar [not null]
+  description varchar
+}
+
+Table m_payment_method {
+  id bigint [pk, increment]
+  code varchar [not null, unique]
+  name varchar
+  status varchar [default: 'ACTIVE']
+}
+
+Table m_payment_type {
+  id bigint [pk, increment]
+  code varchar
+  name varchar
+}
+
+// People Tables
+Table m_customer {
+  id bigint [pk, increment]
+  full_name varchar [not null]
+  phone varchar
+  id_number varchar [not null, unique]
+  address varchar
+  status CustomerStatus [default: 'ACTIVE']
+  created_at datetime [default: `now()`]
+  updated_at datetime
+  deleted_at datetime
+}
+
+Table m_user {
+  id bigint [pk, increment]
+  username varchar [not null, unique]
+  password varchar [not null]
+  role_id bigint [ref: > m_role.id]
+  branch_id bigint [ref: > m_branch.id]
+  status varchar [default: 'ACTIVE']
+  created_at datetime [default: `now()`]
+}
+
+// Loan Core Tables
+Table pawn_item {
+  id bigint [pk, increment]
+  customer_id bigint [not null, ref: > m_customer.id]
+  item_type varchar
+  description varchar
+  estimated_value decimal
+  photo_url varchar
+  status CollateralStatus [default: 'AVAILABLE']
+  created_at datetime [default: `now()`]
+  updated_at datetime
+  deleted_at datetime
+}
+
+Table pawn_loan {
+  id bigint [pk, increment]
+  loan_code varchar [not null, unique]
+  customer_id bigint [not null, ref: > m_customer.id]
+  pawn_item_id bigint [not null, ref: > pawn_item.id]
+  currency_id bigint [not null, ref: > m_currency.id]
+  branch_id bigint [not null, ref: > m_branch.id]
+  loan_amount decimal [not null]
+  interest_rate decimal [not null]
+  total_payable_amount decimal [not null]
+  loan_date date [default: `now()`]
+  due_date date
+  redemption_deadline date
+  loan_duration_days integer [default: 30]
+  grace_period_days integer [default: 7]
+  storage_fee decimal [default: 0]
+  penalty_rate decimal [default: 0]
+  payment_frequency varchar [default: 'ONE_TIME']
+  number_of_installments integer [default: 1]
+  installment_amount decimal
+  status LoanStatus [default: 'PENDING']
+  created_at datetime [default: `now()`]
+  updated_at datetime
+  redeemed_at datetime
+  defaulted_at datetime
+}
+
+Table pawn_repayment {
+  id bigint [pk, increment]
+  pawn_loan_id bigint [ref: > pawn_loan.id]
+  currency_id bigint [ref: > m_currency.id]
+  payment_method_id bigint [ref: > m_payment_method.id]
+  payment_type_id bigint [ref: > m_payment_type.id]
+  payment_date date [default: `now()`]
+  paid_amount decimal
+  principal_paid decimal
+  interest_paid decimal
+  penalty_paid decimal
+  remaining_principal decimal
+  received_by bigint [ref: > m_user.id]
+  created_at datetime [default: `now()`]
+}
+
+Table pawn_forfeit {
+  id bigint [pk, increment]
+  pawn_loan_id bigint [ref: > pawn_loan.id]
+  forfeit_date date
+  note varchar
+}
+
+Table cfg_loan {
+  id bigint [pk, increment]
+  branch_id bigint [ref: > m_branch.id]
+  currency_id bigint [ref: > m_currency.id]
+  min_loan_amount decimal
+  max_loan_amount decimal
+  interest_rate decimal
+  interest_type varchar
+  interest_period varchar
+  penalty_rate decimal
+  penalty_grace_days integer
+  max_loan_duration integer
+  auto_forfeit_days integer
+  status varchar
+  effective_from date
+  effective_to date
+  created_at datetime
+}
+
+// Relationships
+Ref: pawn_loan.pawn_item_id > pawn_item.id [delete: restrict, update: cascade]
+Ref: pawn_loan.customer_id > m_customer.id [delete: restrict, update: cascade]
+Ref: pawn_loan.currency_id > m_currency.id [delete: restrict, update: cascade]
+Ref: pawn_loan.branch_id > m_branch.id [delete: restrict, update: cascade]
+
+Ref: pawn_item.customer_id > m_customer.id [delete: restrict, update: cascade]
+
+Ref: pawn_repayment.pawn_loan_id > pawn_loan.id [delete: restrict, update: cascade]
+Ref: pawn_repayment.currency_id > m_currency.id [delete: restrict, update: cascade]
+Ref: pawn_repayment.payment_method_id > m_payment_method.id [delete: restrict, update: cascade]
+Ref: pawn_repayment.payment_type_id > m_payment_type.id [delete: restrict, update: cascade]
+Ref: pawn_repayment.received_by > m_user.id [delete: restrict, update: cascade]
+
+Ref: pawn_forfeit.pawn_loan_id > pawn_loan.id [delete: restrict, update: cascade]
+
+Ref: m_user.role_id > m_role.id [delete: restrict, update: cascade]
+Ref: m_user.branch_id > m_branch.id [delete: restrict, update: cascade]
+
+Ref: cfg_loan.branch_id > m_branch.id [delete: restrict, update: cascade]
+Ref: cfg_loan.currency_id > m_currency.id [delete: restrict, update: cascade]
+

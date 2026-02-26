@@ -1,7 +1,9 @@
 package com.example.loan_origination_system.exception;
 
-import com.example.loan_origination_system.dto.ApiResponse;
-import jakarta.validation.ConstraintViolationException;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -9,8 +11,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.util.HashMap;
-import java.util.Map;
+import com.example.loan_origination_system.dto.ApiResponse;
+
+import jakarta.validation.ConstraintViolationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -18,7 +21,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Object>> handleBusinessException(BusinessException ex) {
         ApiResponse<Object> response = ApiResponse.error(ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+    
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolationException(DataIntegrityViolationException ex) {
+        String message = "Data integrity violation";
+        if (ex.getMessage() != null && ex.getMessage().contains("unique constraint") || ex.getMessage().contains("duplicate key")) {
+            message = "Duplicate entry detected";
+        }
+        ApiResponse<Object> response = ApiResponse.error(message);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
     
     @ExceptionHandler(MethodArgumentNotValidException.class)

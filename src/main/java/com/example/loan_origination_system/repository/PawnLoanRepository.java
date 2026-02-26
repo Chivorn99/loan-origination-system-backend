@@ -27,6 +27,22 @@ public interface PawnLoanRepository extends JpaRepository<PawnLoan, Long> {
     @Query("SELECT l FROM PawnLoan l WHERE l.status = 'ACTIVE' AND l.dueDate < :currentDate")
     List<PawnLoan> findOverdueLoans(@Param("currentDate") LocalDate currentDate);
     
+    @Query("SELECT l FROM PawnLoan l WHERE (l.status = 'ACTIVE' OR l.status = 'PARTIALLY_PAID') " +
+           "AND l.dueDate <= :currentDate AND l.dueDate IS NOT NULL")
+    List<PawnLoan> findLoansDueByDate(@Param("currentDate") LocalDate currentDate);
+    
+    @Query("SELECT l FROM PawnLoan l WHERE l.status = 'OVERDUE' " +
+           "AND l.gracePeriodEndDate <= :currentDate AND l.gracePeriodEndDate IS NOT NULL")
+    List<PawnLoan> findOverdueLoansWithExpiredGracePeriod(@Param("currentDate") LocalDate currentDate);
+    
+    @Query("SELECT l FROM PawnLoan l WHERE l.status = :status")
+    List<PawnLoan> findByStatus(@Param("status") LoanStatus status);
+    
+    @Query("SELECT l FROM PawnLoan l WHERE l.status = 'DEFAULTED' " +
+           "AND l.defaultedAt >= :startDate AND l.defaultedAt <= :endDate")
+    List<PawnLoan> findDefaultedLoansInPeriod(@Param("startDate") LocalDate startDate,
+                                              @Param("endDate") LocalDate endDate);
+    
     @Query("SELECT l FROM PawnLoan l WHERE l.status != 'CANCELLED'")
     Page<PawnLoan> findAllActive(Pageable pageable);
     

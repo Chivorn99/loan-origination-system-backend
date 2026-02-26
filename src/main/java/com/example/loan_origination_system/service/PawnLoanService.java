@@ -1,27 +1,37 @@
 package com.example.loan_origination_system.service;
 
-import com.example.loan_origination_system.exception.BusinessException;
-import com.example.loan_origination_system.model.enums.CollateralStatus;
-import com.example.loan_origination_system.model.enums.LoanStatus;
-import com.example.loan_origination_system.model.loan.PawnItem;
-import com.example.loan_origination_system.model.loan.PawnLoan;
-import com.example.loan_origination_system.model.master.Branch;
-import com.example.loan_origination_system.model.master.Currency;
-import com.example.loan_origination_system.model.people.Customer;
-import com.example.loan_origination_system.repository.*;
-import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
+import com.example.loan_origination_system.dto.PawnLoanRequest;
+import com.example.loan_origination_system.exception.BusinessException;
+import com.example.loan_origination_system.mapper.LoanMapper;
+import com.example.loan_origination_system.model.enums.CollateralStatus;
+import com.example.loan_origination_system.model.enums.LoanEvent;
+import com.example.loan_origination_system.model.enums.LoanStatus;
+import com.example.loan_origination_system.model.enums.PaymentFrequency;
+import com.example.loan_origination_system.model.loan.PawnItem;
+import com.example.loan_origination_system.model.loan.PawnLoan;
+import com.example.loan_origination_system.model.loan.PaymentScheduleItem;
+import com.example.loan_origination_system.model.master.Branch;
+import com.example.loan_origination_system.model.master.Currency;
+import com.example.loan_origination_system.model.people.Customer;
+import com.example.loan_origination_system.repository.BranchRepository;
+import com.example.loan_origination_system.repository.CurrencyRepository;
+import com.example.loan_origination_system.repository.CustomerRepository;
+import com.example.loan_origination_system.repository.PawnItemRepository;
+import com.example.loan_origination_system.repository.PawnLoanRepository;
+
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +43,8 @@ public class PawnLoanService {
     private final BranchRepository branchRepository;
     private final CurrencyRepository currencyRepository;
     private final PawnItemService pawnItemService;
+    private final LoanStateMachine loanStateMachine;
+    private final LoanMapper loanMapper;
     
     /**
      * Create a new loan with comprehensive business logic
@@ -42,16 +54,19 @@ public class PawnLoanService {
      * 3. Change collateral status when loan created
      */
     @Transactional
-    public PawnLoan createLoan(PawnLoan loan) {
+    public PawnLoan createLoan(PawnLoanRequest request) {
+        // Convert DTO to entity (ignoring relationships)
+        PawnLoan loan = loanMapper.toPawnLoan(request);
+        
         // Validate customer exists
-        Customer customer = customerRepository.findById(loan.getCustomer().getId())
+        Customer customer = customerRepository.findById(request.getCustomerId())
             .orElseThrow(() -> new BusinessException("CUSTOMER_NOT_FOUND",
-                "Customer with ID " + loan.getCustomer().getId() + " not found"));
+                "Customer with ID " + request.getCustomerId() + " not found"));
         
         // Validate collateral exists and is available
-        PawnItem pawnItem = pawnItemRepository.findById(loan.getPawnItem().getId())
+        PawnItem pawnItem = pawnItemRepository.findById(request.getPawnItemId())
             .orElseThrow(() -> new BusinessException("COLLATERAL_NOT_FOUND",
-                "Collateral with ID " + loan.getPawnItem().getId() + " not found"));
+                "Collateral with ID " + request.getPawnItemId() + " not found"));
         
         if (pawnItem.getStatus() != CollateralStatus.AVAILABLE) {
             throw new BusinessException("COLLATERAL_NOT_AVAILABLE",
@@ -59,14 +74,14 @@ public class PawnLoanService {
         }
         
         // Validate branch exists
-        Branch branch = branchRepository.findById(loan.getBranch().getId())
+        Branch branch = branchRepository.findById(request.getBranchId())
             .orElseThrow(() -> new BusinessException("BRANCH_NOT_FOUND",
-                "Branch with ID " + loan.getBranch().getId() + " not found"));
+                "Branch with ID " + request.getBranchId() + " not found"));
         
         // Validate currency exists
-        Currency currency = currencyRepository.findById(loan.getCurrency().getId())
+        Currency currency = currencyRepository.findById(request.getCurrencyId())
             .orElseThrow(() -> new BusinessException("CURRENCY_NOT_FOUND",
-                "Currency with ID " + loan.getCurrency().getId() + " not found"));
+                "Currency with ID " + request.getCurrencyId() + " not found"));
         
         // Business Rule: principalAmount <= 70% of collateral estimatedValue
         BigDecimal maxLoanAmount = pawnItem.getEstimatedValue()
@@ -79,29 +94,91 @@ public class PawnLoanService {
                     loan.getLoanAmount(), maxLoanAmount, pawnItem.getEstimatedValue()));
         }
         
-        // Calculate total payable amount (principal + interest)
+        // Calculate due date from loan duration if not provided
+        if (loan.getDueDate() == null && loan.getLoanDurationDays() != null) {
+            LocalDate dueDate = loan.getLoanDate() != null ?
+                loan.getLoanDate().plusDays(loan.getLoanDurationDays()) :
+                LocalDate.now().plusDays(loan.getLoanDurationDays());
+            loan.setDueDate(dueDate);
+        }
+        
+        // Validate interest rate is not null before calculation
+        if (loan.getInterestRate() == null) {
+            throw new BusinessException("INTEREST_RATE_REQUIRED", "Interest rate is required for loan calculation");
+        }
+        
+        // Calculate total payable amount (principal + interest + storage fee)
         BigDecimal interestAmount = loan.getLoanAmount()
             .multiply(loan.getInterestRate().divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
-        BigDecimal totalPayableAmount = loan.getLoanAmount().add(interestAmount)
+        
+        BigDecimal storageFee = loan.getStorageFee() != null ? loan.getStorageFee() : BigDecimal.ZERO;
+        BigDecimal totalPayableAmount = loan.getLoanAmount()
+            .add(interestAmount)
+            .add(storageFee)
             .setScale(2, RoundingMode.HALF_UP);
+        
+        // Set redemption deadline if not provided (due date + grace period)
+        if (loan.getRedemptionDeadline() == null && loan.getDueDate() != null && loan.getGracePeriodDays() != null) {
+            LocalDate redemptionDeadline = loan.getDueDate().plusDays(loan.getGracePeriodDays());
+            loan.setRedemptionDeadline(redemptionDeadline);
+        }
+        
+        // Calculate installment amount if not provided for installment payments
+        if (loan.getPaymentFrequency() != null &&
+            loan.getPaymentFrequency() != PaymentFrequency.ONE_TIME &&
+            loan.getNumberOfInstallments() != null &&
+            loan.getNumberOfInstallments() > 1 &&
+            loan.getInstallmentAmount() == null) {
+            
+            // Calculate equal installments including interest
+            BigDecimal installmentAmount = totalPayableAmount
+                .divide(new BigDecimal(loan.getNumberOfInstallments()), 2, RoundingMode.HALF_UP);
+            loan.setInstallmentAmount(installmentAmount);
+        }
+        
+        // Set default values if not provided
+        if (loan.getLoanDurationDays() == null) {
+            loan.setLoanDurationDays(30); // Default 30 days
+        }
+        
+        if (loan.getGracePeriodDays() == null) {
+            loan.setGracePeriodDays(7); // Default 7 days grace period
+        }
+        
+        if (loan.getPenaltyRate() == null) {
+            loan.setPenaltyRate(BigDecimal.ZERO);
+        }
+        
+        if (loan.getStorageFee() == null) {
+            loan.setStorageFee(BigDecimal.ZERO);
+        }
+        
+        if (loan.getPaymentFrequency() == null) {
+            loan.setPaymentFrequency(PaymentFrequency.ONE_TIME);
+        }
+        
+        if (loan.getNumberOfInstallments() == null) {
+            loan.setNumberOfInstallments(1);
+        }
         
         // Generate unique loan code
         String loanCode = generateLoanCode();
         
-        // Set loan properties
+        // Set loan properties (loan starts as CREATED)
         loan.setCustomer(customer);
         loan.setPawnItem(pawnItem);
         loan.setBranch(branch);
         loan.setCurrency(currency);
         loan.setLoanCode(loanCode);
         loan.setTotalPayableAmount(totalPayableAmount);
-        loan.setStatus(LoanStatus.ACTIVE);
+        // Status defaults to CREATED (set in entity)
         
-        // Update collateral status to PAWNED
-        pawnItem.setStatus(CollateralStatus.PAWNED);
-        pawnItemRepository.save(pawnItem);
+        // Save the loan first
+        PawnLoan savedLoan = pawnLoanRepository.save(loan);
         
-        return pawnLoanRepository.save(loan);
+        // Issue the loan using state machine (CREATED → ACTIVE)
+        // This will also update collateral status to PAWNED
+        return loanStateMachine.issueLoan(savedLoan.getId());
     }
     
     /**
@@ -178,16 +255,8 @@ public class PawnLoanService {
                 "Cannot redeem loan with ID " + id + " because it is not active. Current status: " + loan.getStatus());
         }
         
-        // Update loan status
-        loan.setStatus(LoanStatus.REDEEMED);
-        loan.setRedeemedAt(LocalDateTime.now());
-        
-        // Update collateral status to AVAILABLE
-        PawnItem pawnItem = loan.getPawnItem();
-        pawnItem.setStatus(CollateralStatus.AVAILABLE);
-        pawnItemRepository.save(pawnItem);
-        
-        return pawnLoanRepository.save(loan);
+        // Use state machine to redeem the loan (ACTIVE → REDEEMED)
+        return loanStateMachine.processFullPayment(id);
     }
     
     /**
@@ -202,46 +271,48 @@ public class PawnLoanService {
                 "Cannot mark loan with ID " + id + " as defaulted because it is not active. Current status: " + loan.getStatus());
         }
         
-        loan.setStatus(LoanStatus.DEFAULTED);
-        loan.setDefaultedAt(LocalDateTime.now());
-        
-        // Update collateral status to FORFEITED
-        PawnItem pawnItem = loan.getPawnItem();
-        pawnItem.setStatus(CollateralStatus.FORFEITED);
-        pawnItemRepository.save(pawnItem);
-        
-        return pawnLoanRepository.save(loan);
+        // Use state machine to mark as defaulted (ACTIVE → DEFAULTED)
+        return loanStateMachine.transition(id, LoanEvent.MANUAL_DEFAULT);
     }
     
     /**
      * Scheduled job to automatically mark overdue loans as defaulted
      * Business Rule: If past maturityDate → status DEFAULTED
+     *
+     * DEPRECATED: Replaced by LoanSchedulerService with two-step process
+     * (ACTIVE → OVERDUE → DEFAULTED)
      */
-    @Scheduled(cron = "0 0 0 * * ?") // Run daily at midnight
-    @Transactional
-    public void processOverdueLoans() {
-        LocalDate today = LocalDate.now();
-        List<PawnLoan> overdueLoans = pawnLoanRepository.findOverdueLoans(today);
-        
-        for (PawnLoan loan : overdueLoans) {
-            if (loan.getStatus() == LoanStatus.ACTIVE) {
-                loan.setStatus(LoanStatus.DEFAULTED);
-                loan.setDefaultedAt(LocalDateTime.now());
-                
-                // Update collateral status to FORFEITED
-                PawnItem pawnItem = loan.getPawnItem();
-                pawnItem.setStatus(CollateralStatus.FORFEITED);
-                pawnItemRepository.save(pawnItem);
-                
-                pawnLoanRepository.save(loan);
-            }
-        }
-    }
+    // @Scheduled(cron = "0 0 0 * * ?") // Run daily at midnight
+    // @Transactional
+    // public void processOverdueLoans() {
+    //     LocalDate today = LocalDate.now();
+    //     List<PawnLoan> overdueLoans = pawnLoanRepository.findOverdueLoans(today);
+    //
+    //     for (PawnLoan loan : overdueLoans) {
+    //         if (loan.getStatus() == LoanStatus.ACTIVE) {
+    //             loan.setStatus(LoanStatus.DEFAULTED);
+    //             loan.setDefaultedAt(LocalDateTime.now());
+    //
+    //             // Update collateral status to FORFEITED
+    //             PawnItem pawnItem = loan.getPawnItem();
+    //             pawnItem.setStatus(CollateralStatus.FORFEITED);
+    //             pawnItemRepository.save(pawnItem);
+    //
+    //             pawnLoanRepository.save(loan);
+    //         }
+    //     }
+    // }
     
     /**
      * Calculate total payable amount for a loan
      */
     public BigDecimal calculateTotalPayableAmount(BigDecimal principalAmount, BigDecimal interestRate) {
+        if (principalAmount == null) {
+            throw new IllegalArgumentException("Principal amount cannot be null");
+        }
+        if (interestRate == null) {
+            throw new IllegalArgumentException("Interest rate cannot be null");
+        }
         BigDecimal interestAmount = principalAmount
             .multiply(interestRate.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
         return principalAmount.add(interestAmount).setScale(2, RoundingMode.HALF_UP);
@@ -255,6 +326,95 @@ public class PawnLoanService {
             return false;
         }
         return loan.getDueDate().isBefore(LocalDate.now());
+    }
+    
+    /**
+     * Generate payment schedule for a loan
+     * Creates a list of installments from 1st payment to last payment
+     */
+    public List<PaymentScheduleItem> generatePaymentSchedule(PawnLoan loan) {
+        List<PaymentScheduleItem> schedule = new ArrayList<>();
+        
+        if (loan.getPaymentFrequency() == PaymentFrequency.ONE_TIME ||
+            loan.getNumberOfInstallments() == null || loan.getNumberOfInstallments() <= 1) {
+            // One-time payment
+            PaymentScheduleItem item = new PaymentScheduleItem(
+                1,
+                loan.getDueDate(),
+                loan.getTotalPayableAmount(),
+                loan.getLoanAmount(),
+                loan.getTotalPayableAmount().subtract(loan.getLoanAmount()),
+                BigDecimal.ZERO
+            );
+            schedule.add(item);
+            return schedule;
+        }
+        
+        // Installment payments
+        int numberOfInstallments = loan.getNumberOfInstallments();
+        if (numberOfInstallments <= 0) {
+            throw new IllegalArgumentException("Number of installments must be greater than 0");
+        }
+        
+        BigDecimal installmentAmount = loan.getInstallmentAmount();
+        if (installmentAmount == null) {
+            // Calculate equal installments
+            installmentAmount = loan.getTotalPayableAmount()
+                .divide(new BigDecimal(numberOfInstallments), 2, RoundingMode.HALF_UP);
+        }
+        
+        BigDecimal remainingBalance = loan.getTotalPayableAmount();
+        LocalDate currentDueDate = loan.getLoanDate() != null ? loan.getLoanDate() : LocalDate.now();
+        
+        // Calculate interest per installment (simple interest distributed equally)
+        BigDecimal totalInterest = loan.getTotalPayableAmount().subtract(loan.getLoanAmount());
+        BigDecimal interestPerInstallment = totalInterest.divide(
+            new BigDecimal(numberOfInstallments), 2, RoundingMode.HALF_UP);
+        
+        // Calculate principal per installment
+        BigDecimal principalPerInstallment = loan.getLoanAmount().divide(
+            new BigDecimal(numberOfInstallments), 2, RoundingMode.HALF_UP);
+        
+        for (int i = 1; i <= numberOfInstallments; i++) {
+            // Calculate due date based on payment frequency
+            LocalDate dueDate = calculateNextDueDate(currentDueDate, loan.getPaymentFrequency(), i);
+            
+            // Update remaining balance
+            remainingBalance = remainingBalance.subtract(installmentAmount);
+            if (remainingBalance.compareTo(BigDecimal.ZERO) < 0) {
+                remainingBalance = BigDecimal.ZERO;
+            }
+            
+            PaymentScheduleItem item = new PaymentScheduleItem(
+                i,
+                dueDate,
+                installmentAmount,
+                principalPerInstallment,
+                interestPerInstallment,
+                remainingBalance
+            );
+            schedule.add(item);
+        }
+        
+        return schedule;
+    }
+    
+    /**
+     * Calculate next due date based on payment frequency
+     */
+    private LocalDate calculateNextDueDate(LocalDate startDate, PaymentFrequency frequency, int installmentNumber) {
+        switch (frequency) {
+            case WEEKLY:
+                return startDate.plusWeeks(installmentNumber);
+            case BI_WEEKLY:
+                return startDate.plusWeeks(installmentNumber * 2);
+            case MONTHLY:
+                return startDate.plusMonths(installmentNumber);
+            case QUARTERLY:
+                return startDate.plusMonths(installmentNumber * 3);
+            default:
+                return startDate.plusDays(installmentNumber * 30); // Default monthly
+        }
     }
     
     /**
