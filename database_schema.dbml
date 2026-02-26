@@ -112,6 +112,14 @@ Table pawn_loan {
   total_payable_amount decimal [not null]
   loan_date date [default: `now()`]
   due_date date
+  redemption_deadline date
+  loan_duration_days integer [default: 30]
+  grace_period_days integer [default: 7]
+  storage_fee decimal [default: 0]
+  penalty_rate decimal [default: 0]
+  payment_frequency varchar [default: 'ONE_TIME']
+  number_of_installments integer [default: 1]
+  installment_amount decimal
   status LoanStatus [default: 'PENDING']
   created_at datetime [default: `now()`]
   updated_at datetime

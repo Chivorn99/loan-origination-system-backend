@@ -3,8 +3,11 @@ package com.example.loan_origination_system.model.loan;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.example.loan_origination_system.model.enums.LoanStatus;
+import com.example.loan_origination_system.model.enums.PaymentFrequency;
 import com.example.loan_origination_system.model.master.Branch;
 import com.example.loan_origination_system.model.master.Currency;
 import com.example.loan_origination_system.model.people.Customer;
@@ -22,6 +25,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
 import lombok.Data;
 
@@ -66,10 +70,26 @@ public class PawnLoan {
 
     private LocalDate loanDate = LocalDate.now();
     private LocalDate dueDate;
-    private LocalDate gracePeriodEndDate; // Date when grace period expires (overdue → defaulted)
-
+    private LocalDate redemptionDeadline; // When user can collect their item
+    private LocalDate gracePeriodEndDate; // End date of grace period after overdue
+    
+    private Integer loanDurationDays; // Duration of loan in days
+    private Integer gracePeriodDays; // Grace period after due date for redemption
+    
+    private BigDecimal storageFee; // Fee for storing the pawned item
+    private BigDecimal penaltyRate; // Penalty rate for late payments
+    
+    @Enumerated(EnumType.STRING)
+    private PaymentFrequency paymentFrequency = PaymentFrequency.ONE_TIME;
+    
+    private Integer numberOfInstallments; // For installment payments
+    private BigDecimal installmentAmount; // Amount per installment
+    
     @Enumerated(EnumType.STRING)
     private LoanStatus status = LoanStatus.CREATED;
+    
+    @Transient
+    private List<PaymentScheduleItem> paymentSchedule = new ArrayList<>();
     
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt;
