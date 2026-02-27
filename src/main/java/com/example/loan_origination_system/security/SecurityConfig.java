@@ -35,7 +35,7 @@ public class SecurityConfig {
                 // 2. Configure endpoint access
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll() // Allow health/info checks
-                        .requestMatchers("/api/auth/**").permitAll() // Anyone can try to login
+                        .requestMatchers("/api/auth/**","/api/**").permitAll() // Anyone can try to login
                         .anyRequest().authenticated() // EVERY other endpoint requires a valid JWT
                 )
 
