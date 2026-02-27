@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.loan_origination_system.dto.ApiResponse;
 import com.example.loan_origination_system.dto.BranchPatchRequest;
 import com.example.loan_origination_system.dto.BranchRequest;
-import com.example.loan_origination_system.model.master.Branch;
+import com.example.loan_origination_system.dto.BranchResponse;
 import com.example.loan_origination_system.service.BranchService;
 
 import jakarta.validation.Valid;
@@ -36,23 +36,24 @@ public class BranchController {
      * Create branch
      */
     @PostMapping
-    public ResponseEntity<ApiResponse<Branch>> createBranch(
+    public ResponseEntity<ApiResponse<BranchResponse>> createBranch(
             @Valid @RequestBody BranchRequest request) {
 
-        Branch branch = branchService.createBranch(request);
+        BranchResponse branchResponse = branchService.createBranch(request);
 
         return ResponseEntity
                 .status(201)
-                .body(ApiResponse.success("Branch created successfully", branch));
+                .body(ApiResponse.success("Branch created successfully", branchResponse));
     }
 
     /**
      * Get branch by ID
      */
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<Branch>> getBranch(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<BranchResponse>> getBranch(@PathVariable Long id) {
+        BranchResponse branchResponse = branchService.getBranchById(id);
         return ResponseEntity.ok(
-                ApiResponse.success(branchService.getBranchById(id))
+                ApiResponse.success("Branch retrieved successfully", branchResponse)
         );
     }
 
@@ -60,11 +61,11 @@ public class BranchController {
      * Update branch (FULL UPDATE)
      */
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<Branch>> updateBranch(
+    public ResponseEntity<ApiResponse<BranchResponse>> updateBranch(
             @PathVariable Long id,
             @Valid @RequestBody BranchRequest request) {
 
-        Branch updatedBranch = branchService.updateBranch(id, request);
+        BranchResponse updatedBranch = branchService.updateBranch(id, request);
 
         return ResponseEntity.ok(
                 ApiResponse.success("Branch updated successfully", updatedBranch)
@@ -75,11 +76,11 @@ public class BranchController {
      * Partial update (PATCH)
      */
     @PatchMapping("/{id}")
-    public ResponseEntity<ApiResponse<Branch>> patchBranch(
+    public ResponseEntity<ApiResponse<BranchResponse>> patchBranch(
             @PathVariable Long id,
             @RequestBody BranchPatchRequest request) {
 
-        Branch updatedBranch = branchService.patchBranch(id, request);
+        BranchResponse updatedBranch = branchService.patchBranch(id, request);
 
         return ResponseEntity.ok(
                 ApiResponse.success("Branch updated successfully", updatedBranch)
@@ -94,48 +95,33 @@ public class BranchController {
      * GET /api/branches?status=ACTIVE
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<Branch>>> getBranches(
+    public ResponseEntity<ApiResponse<Page<BranchResponse>>> getBranches(
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "name") String sortBy,
-            @RequestParam(defaultValue = "asc") String direction) {
+            @RequestParam(defaultValue = "ASC") String direction) {
 
-        Sort.Direction sortDirection =
-                direction.equalsIgnoreCase("asc")
-                        ? Sort.Direction.ASC
-                        : Sort.Direction.DESC;
+        Sort.Direction sortDirection = direction.equalsIgnoreCase("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
 
-        Pageable pageable =
-                PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
-
-        Page<Branch> branches = (status == null)
+        Page<BranchResponse> branches = (status == null || status.isEmpty())
                 ? branchService.getAllBranches(pageable)
                 : branchService.getBranchesByStatus(status, pageable);
 
-        return ResponseEntity.ok(ApiResponse.success(branches));
-    }
-
-    /**
-     * Soft delete branch (set status to INACTIVE)
-     */
-    @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteBranch(@PathVariable Long id) {
-
-        branchService.deleteBranch(id);
-
         return ResponseEntity.ok(
-                ApiResponse.success("Branch deleted successfully", null)
+                ApiResponse.success("Branches retrieved successfully", branches)
         );
     }
 
     /**
-     * Check if branch exists by name
+     * Soft delete (set status to INACTIVE)
      */
-    @GetMapping("/exists/{name}")
-    public ResponseEntity<ApiResponse<Boolean>> checkBranchExists(@PathVariable String name) {
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<String>> deleteBranch(@PathVariable Long id) {
+        branchService.deleteBranch(id);
         return ResponseEntity.ok(
-                ApiResponse.success(branchService.existsByName(name))
+                ApiResponse.success("Branch deleted successfully", null)
         );
     }
 }

@@ -609,13 +609,13 @@ public class PawnLoanService {
             case WEEKLY:
                 return startDate.plusWeeks(installmentNumber);
             case BI_WEEKLY:
-                return startDate.plusWeeks(installmentNumber * 2);
+                return startDate.plusWeeks((long) installmentNumber * 2L);
             case MONTHLY:
                 return startDate.plusMonths(installmentNumber);
             case QUARTERLY:
-                return startDate.plusMonths(installmentNumber * 3);
+                return startDate.plusMonths((long) installmentNumber * 3L);
             default:
-                return startDate.plusDays(installmentNumber * 30); // Default monthly
+                return startDate.plusDays((long) installmentNumber * 30L); // Default monthly
         }
     }
     
