@@ -27,22 +27,14 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody AuthRequest authRequest) {
         try {
-            // 1. Spring Security checks the username and password here
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(authRequest.username(), authRequest.password())
             );
         } catch (Exception e) {
-            // If it fails, return a 401 Unauthorized
             return ResponseEntity.status(401).body("Error: Incorrect username or password!");
         }
-
-        // 2. If password is correct, fetch the user's details
         final UserDetails userDetails = userDetailsService.loadUserByUsername(authRequest.username());
-
-        // 3. Generate the JWT Token
         final String jwt = jwtUtil.generateToken(userDetails);
-
-        // 4. Return the token in JSON format
         return ResponseEntity.ok(new AuthResponse(jwt));
     }
 }

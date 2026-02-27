@@ -16,21 +16,15 @@ import java.util.function.Function;
 
 @Component
 public class JwtUtil {
-
-    // This is the "Master Password" used to sign the tokens.
-    // In production, you would put this in your application.properties!
     @Value("${jwt.secret:ThisIsASecretKeyForJwtAuthenticationInPawnShopManagementSystem2026!}")
     private String secret;
 
-    // Token is valid for 24 Hours (in milliseconds)
     private final long EXPIRATION_TIME = 1000 * 60 * 60 * 24;
 
-    // Creates the cryptographic key
     private Key getSigningKey() {
         return Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    // 1. EXTRACT: Get the username out of the token
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
     }
@@ -56,10 +50,8 @@ public class JwtUtil {
         return extractExpiration(token).before(new Date());
     }
 
-    // 2. GENERATE: Create a new token for a user
     public String generateToken(UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>();
-        // You can embed extra data in the token here if you want (like roles)
         claims.put("roles", userDetails.getAuthorities());
         return createToken(claims, userDetails.getUsername());
     }
@@ -67,14 +59,13 @@ public class JwtUtil {
     private String createToken(Map<String, Object> claims, String subject) {
         return Jwts.builder()
                 .setClaims(claims)
-                .setSubject(subject) // Usually the username
+                .setSubject(subject)
                 .setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
-    // 3. VALIDATE: Check if the token belongs to the user and is still active
     public Boolean validateToken(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
         return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
