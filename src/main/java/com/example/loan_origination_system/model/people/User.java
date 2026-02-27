@@ -40,6 +40,8 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private String password;
 
+    private String phoneNumber;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id")
     private Role role;
