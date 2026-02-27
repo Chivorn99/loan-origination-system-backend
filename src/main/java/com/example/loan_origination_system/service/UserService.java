@@ -1,7 +1,9 @@
 package com.example.loan_origination_system.service;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.example.loan_origination_system.dto.RegisterRequest;
 import com.example.loan_origination_system.dto.UserPatchRequest;
 import com.example.loan_origination_system.dto.UserRequest;
 import com.example.loan_origination_system.exception.BusinessException;
@@ -24,6 +26,7 @@ public class UserService {
     private final RoleRepository roleRepository;
     private final BranchRepository branchRepository;
     private final LoanMapper loanMapper;
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * CREATE
@@ -71,6 +74,83 @@ public class UserService {
         if (user.getStatus() == null) {
             user.setStatus("ACTIVE");
         }
+
+        return userRepository.save(user);
+    }
+
+    /**
+     * REGISTER new user (only superadmin can create users with roles)
+     */
+    @Transactional
+    public User registerUser(RegisterRequest request, String currentUsername) {
+        // Check if current user is superadmin
+        User currentUser = userRepository.findByUsername(currentUsername)
+                .orElseThrow(() -> new BusinessException(
+                        "USER_NOT_FOUND",
+                        "Current user not found"
+                ));
+        
+        if (currentUser.getRole() == null || !"SUPERADMIN".equalsIgnoreCase(currentUser.getRole().getCode())) {
+            throw new BusinessException(
+                    "UNAUTHORIZED",
+                    "Only SUPERADMIN can register new users"
+            );
+        }
+
+        // Check if username already exists
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new BusinessException(
+                    "USERNAME_DUPLICATE",
+                    "Username already exists"
+            );
+        }
+
+        // Check if email already exists (if email is provided)
+        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+            if (userRepository.existsByEmail(request.getEmail())) {
+                throw new BusinessException(
+                        "EMAIL_DUPLICATE",
+                        "Email already exists"
+                );
+            }
+        }
+
+        // Check if phone number already exists (if phone number is provided)
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().trim().isEmpty()) {
+            if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+                throw new BusinessException(
+                        "PHONE_NUMBER_DUPLICATE",
+                        "Phone number already exists"
+                );
+            }
+        }
+
+        // Validate role exists
+        Role role = roleRepository.findById(request.getRoleId())
+                .orElseThrow(() -> new BusinessException(
+                        "ROLE_NOT_FOUND",
+                        "Role not found with ID: " + request.getRoleId()
+                ));
+
+        // Validate branch if provided
+        Branch branch = null;
+        if (request.getBranchId() != null) {
+            branch = branchRepository.findById(request.getBranchId())
+                    .orElseThrow(() -> new BusinessException(
+                            "BRANCH_NOT_FOUND",
+                            "Branch not found with ID: " + request.getBranchId()
+                    ));
+        }
+
+        // Create user from request
+        User user = new User();
+        user.setUsername(request.getUsername());
+        user.setEmail(request.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setPhoneNumber(request.getPhoneNumber());
+        user.setRole(role);
+        user.setBranch(branch);
+        user.setStatus("ACTIVE");
 
         return userRepository.save(user);
     }
