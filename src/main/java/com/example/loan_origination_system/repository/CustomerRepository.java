@@ -30,4 +30,9 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     
     @Query("SELECT COUNT(c) > 0 FROM Customer c WHERE c.idNumber = :idNumber AND c.id != :excludeId")
     boolean existsByIdNumberAndIdNot(@Param("idNumber") String idNumber, @Param("excludeId") Long excludeId);
+    
+    @Query("SELECT c FROM Customer c WHERE c.status != 'DELETED' AND " +
+           "(LOWER(c.fullName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+           "c.idNumber LIKE CONCAT('%', :searchTerm, '%'))")
+    Page<Customer> searchCustomers(@Param("searchTerm") String searchTerm, Pageable pageable);
 }
