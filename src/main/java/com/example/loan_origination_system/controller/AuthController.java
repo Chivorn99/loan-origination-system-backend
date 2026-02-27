@@ -4,7 +4,9 @@ import com.example.loan_origination_system.dto.AuthRequest;
 import com.example.loan_origination_system.dto.AuthResponse;
 import com.example.loan_origination_system.dto.RegisterRequest;
 import com.example.loan_origination_system.security.JwtUtil;
+import com.example.loan_origination_system.security.TokenBlacklist;
 import com.example.loan_origination_system.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -30,6 +32,9 @@ public class AuthController {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private TokenBlacklist tokenBlacklist;
+
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody AuthRequest authRequest) {
         try {
@@ -50,6 +55,19 @@ public class AuthController {
 
         // 4. Return the token in JSON format
         return ResponseEntity.ok(new AuthResponse(jwt));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            // Blacklist the token so it can never be used again
+            tokenBlacklist.blacklist(token, jwtUtil.extractExpiration(token));
+        }
+        // Clear the security context for this request
+        SecurityContextHolder.clearContext();
+        return ResponseEntity.ok("Logged out successfully.");
     }
 
     @PostMapping("/register")

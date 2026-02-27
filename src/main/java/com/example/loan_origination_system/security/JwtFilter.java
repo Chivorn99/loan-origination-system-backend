@@ -20,9 +20,11 @@ public class JwtFilter extends OncePerRequestFilter {
     @Autowired
     private JwtUtil jwtUtil;
 
-    // We will create this class in the next step!
     @Autowired
     private CustomUserDetailsService userDetailsService;
+
+    @Autowired
+    private TokenBlacklist tokenBlacklist;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
@@ -33,6 +35,14 @@ public class JwtFilter extends OncePerRequestFilter {
         // 1. Check if the request has a "Bearer " token in the header
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             jwt = authHeader.substring(7); // Remove "Bearer " to get the pure token
+
+            // Reject if the token has been blacklisted (i.e. user logged out)
+            if (tokenBlacklist.isBlacklisted(jwt)) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.getWriter().write("Token has been invalidated. Please log in again.");
+                return;
+            }
+
             try {
                 username = jwtUtil.extractUsername(jwt);
             } catch (Exception e) {
