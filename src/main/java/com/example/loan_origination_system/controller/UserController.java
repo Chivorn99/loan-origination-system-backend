@@ -22,7 +22,6 @@ public class UserController {
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser() {
         try {
-            // JwtFilter already decoded the token and stored the username in SecurityContext
             var authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication == null || !authentication.isAuthenticated()) {
                 return ResponseEntity.status(401).body("Unauthorized: No valid token provided");
