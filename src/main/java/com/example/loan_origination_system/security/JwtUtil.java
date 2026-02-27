@@ -19,7 +19,7 @@ public class JwtUtil {
 
     // This is the "Master Password" used to sign the tokens.
     // In production, you would put this in your application.properties!
-    @Value("${jwt.secret:ThisIsASecretKeyForJwtAuthenticationInPawnShopManagementSystem2026!}")
+    @Value("${jwt.secret}")
     private String secret;
 
     // Token is valid for 24 Hours (in milliseconds)
