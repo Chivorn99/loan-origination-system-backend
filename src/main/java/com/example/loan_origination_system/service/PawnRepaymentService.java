@@ -554,7 +554,11 @@ public class PawnRepaymentService {
         public BigDecimal getTotalPenalty() { return totalPenalty; }
         public void setTotalPenalty(BigDecimal totalPenalty) { this.totalPenalty = totalPenalty; }
         
-        public Map<String, BigDecimal> getMonthlyTotals() { return monthlyTotals; }
-        public void setMonthlyTotals(Map<String, BigDecimal> monthlyTotals) { this.monthlyTotals = monthlyTotals; }
+        public Map<String, BigDecimal> getMonthlyTotals() {
+            return monthlyTotals != null ? new HashMap<>(monthlyTotals) : null;
+        }
+        public void setMonthlyTotals(Map<String, BigDecimal> monthlyTotals) {
+            this.monthlyTotals = monthlyTotals != null ? new HashMap<>(monthlyTotals) : null;
+        }
     }
 }

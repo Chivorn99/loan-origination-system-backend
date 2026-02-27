@@ -6,7 +6,9 @@ import org.springframework.stereotype.Service;
 
 import com.example.loan_origination_system.dto.BranchPatchRequest;
 import com.example.loan_origination_system.dto.BranchRequest;
+import com.example.loan_origination_system.dto.BranchResponse;
 import com.example.loan_origination_system.exception.BusinessException;
+import com.example.loan_origination_system.mapper.BranchMapper;
 import com.example.loan_origination_system.model.master.Branch;
 import com.example.loan_origination_system.repository.BranchRepository;
 
@@ -18,12 +20,13 @@ import lombok.RequiredArgsConstructor;
 public class BranchService {
 
     private final BranchRepository branchRepository;
+    private final BranchMapper branchMapper;
 
     /**
      * CREATE
      */
     @Transactional
-    public Branch createBranch(BranchRequest request) {
+    public BranchResponse createBranch(BranchRequest request) {
 
         if (branchRepository.existsByName(request.getName())) {
             throw new BusinessException(
@@ -32,22 +35,22 @@ public class BranchService {
             );
         }
 
-        Branch branch = new Branch();
-        branch.setName(request.getName());
-        branch.setAddress(request.getAddress());
-        branch.setPhone(request.getPhone());
-        branch.setStatus(request.getStatus() != null ? request.getStatus() : "ACTIVE");
+        Branch branch = branchMapper.toBranch(request);
+        if (branch.getStatus() == null) {
+            branch.setStatus("ACTIVE");
+        }
 
-        return branchRepository.save(branch);
+        Branch savedBranch = branchRepository.save(branch);
+        return branchMapper.toBranchResponse(savedBranch);
     }
 
     /**
      * FULL UPDATE (PUT)
      */
     @Transactional
-    public Branch updateBranch(Long id, BranchRequest request) {
+    public BranchResponse updateBranch(Long id, BranchRequest request) {
 
-        Branch branch = getBranchById(id);
+        Branch branch = getBranchEntityById(id);
 
         // Validate branch name if provided and changed
         if (request.getName() != null && !request.getName().equals(branch.getName())) {
@@ -57,32 +60,20 @@ public class BranchService {
                         "Branch with this name already exists"
                 );
             }
-            branch.setName(request.getName());
         }
 
-        // Update other fields if provided
-        if (request.getAddress() != null) {
-            branch.setAddress(request.getAddress());
-        }
-
-        if (request.getPhone() != null) {
-            branch.setPhone(request.getPhone());
-        }
-
-        if (request.getStatus() != null) {
-            branch.setStatus(request.getStatus());
-        }
-
-        return branchRepository.save(branch);
+        branchMapper.updateBranchFromRequest(request, branch);
+        Branch updatedBranch = branchRepository.save(branch);
+        return branchMapper.toBranchResponse(updatedBranch);
     }
 
     /**
      * PARTIAL UPDATE (PATCH)
      */
     @Transactional
-    public Branch patchBranch(Long id, BranchPatchRequest patch) {
+    public BranchResponse patchBranch(Long id, BranchPatchRequest patch) {
 
-        Branch branch = getBranchById(id);
+        Branch branch = getBranchEntityById(id);
 
         if (patch.getName() != null && !patch.getName().equals(branch.getName())) {
             if (branchRepository.existsByNameAndIdNot(patch.getName(), id)) {
@@ -91,41 +82,29 @@ public class BranchService {
                         "Branch with this name already exists"
                 );
             }
-            branch.setName(patch.getName());
         }
 
-        if (patch.getAddress() != null) {
-            branch.setAddress(patch.getAddress());
-        }
-
-        if (patch.getPhone() != null) {
-            branch.setPhone(patch.getPhone());
-        }
-
-        if (patch.getStatus() != null) {
-            branch.setStatus(patch.getStatus());
-        }
-
-        return branchRepository.save(branch);
+        branchMapper.updateBranchFromPatchRequest(patch, branch);
+        Branch updatedBranch = branchRepository.save(branch);
+        return branchMapper.toBranchResponse(updatedBranch);
     }
 
     /**
-     * READ METHODS
+     * READ METHODS - Return DTOs
      */
-    public Branch getBranchById(Long id) {
-        return branchRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(
-                        "BRANCH_NOT_FOUND",
-                        "Branch with ID " + id + " not found"
-                ));
+    public BranchResponse getBranchById(Long id) {
+        Branch branch = getBranchEntityById(id);
+        return branchMapper.toBranchResponse(branch);
     }
 
-    public Page<Branch> getAllBranches(Pageable pageable) {
-        return branchRepository.findAll(pageable);
+    public Page<BranchResponse> getAllBranches(Pageable pageable) {
+        return branchRepository.findAll(pageable)
+                .map(branchMapper::toBranchResponse);
     }
 
-    public Page<Branch> getBranchesByStatus(String status, Pageable pageable) {
-        return branchRepository.findByStatus(status, pageable);
+    public Page<BranchResponse> getBranchesByStatus(String status, Pageable pageable) {
+        return branchRepository.findByStatus(status, pageable)
+                .map(branchMapper::toBranchResponse);
     }
 
     /**
@@ -133,7 +112,7 @@ public class BranchService {
      */
     @Transactional
     public void deleteBranch(Long id) {
-        Branch branch = getBranchById(id);
+        Branch branch = getBranchEntityById(id);
         branch.setStatus("INACTIVE");
         branchRepository.save(branch);
     }
@@ -143,5 +122,16 @@ public class BranchService {
      */
     public boolean existsByName(String name) {
         return branchRepository.existsByName(name);
+    }
+
+    /**
+     * Internal method to get entity (not exposed)
+     */
+    private Branch getBranchEntityById(Long id) {
+        return branchRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(
+                        "BRANCH_NOT_FOUND",
+                        "Branch with ID " + id + " not found"
+                ));
     }
 }
