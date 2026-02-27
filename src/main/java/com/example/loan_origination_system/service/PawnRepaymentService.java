@@ -3,16 +3,21 @@ package com.example.loan_origination_system.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import com.example.loan_origination_system.dto.BranchResponse;
+import com.example.loan_origination_system.dto.CurrencyResponse;
+import com.example.loan_origination_system.dto.CustomerResponse;
 import com.example.loan_origination_system.dto.PawnRepaymentRequest;
+import com.example.loan_origination_system.dto.UpcomingRepaymentLoanResponse;
 import com.example.loan_origination_system.exception.BusinessException;
 import com.example.loan_origination_system.model.enums.LoanEvent;
 import com.example.loan_origination_system.model.enums.LoanStatus;
@@ -292,6 +297,152 @@ public class PawnRepaymentService {
         report.setNumberOfTransactions(repayments.size());
         
         return report;
+    }
+    
+    /**
+     * Get loans with upcoming repayments within the next X days
+     * @param daysAhead Number of days to look ahead (default 7)
+     * @return List of loans with upcoming repayments mapped to UpcomingRepaymentLoanResponse
+     */
+    public List<UpcomingRepaymentLoanResponse> getUpcomingRepaymentLoans(int daysAhead) {
+        LocalDate startDate = LocalDate.now();
+        LocalDate endDate = startDate.plusDays(daysAhead);
+        
+        List<PawnLoan> loans = pawnLoanRepository.findLoansWithUpcomingRepayments(startDate, endDate);
+        return mapLoansToUpcomingRepaymentResponse(loans);
+    }
+    
+    /**
+     * Get loans with upcoming repayments within the next X days with pagination
+     */
+    public Page<UpcomingRepaymentLoanResponse> getUpcomingRepaymentLoans(int daysAhead, Pageable pageable) {
+        LocalDate startDate = LocalDate.now();
+        LocalDate endDate = startDate.plusDays(daysAhead);
+        
+        Page<PawnLoan> loansPage = pawnLoanRepository.findLoansWithUpcomingRepayments(startDate, endDate, pageable);
+        List<UpcomingRepaymentLoanResponse> responses = mapLoansToUpcomingRepaymentResponse(loansPage.getContent());
+        
+        return new PageImpl<>(responses, pageable, loansPage.getTotalElements());
+    }
+    
+    /**
+     * Get loans with upcoming repayments within a custom date range
+     */
+    public List<UpcomingRepaymentLoanResponse> getUpcomingRepaymentLoans(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null) {
+            startDate = LocalDate.now();
+        }
+        if (endDate == null) {
+            endDate = startDate.plusDays(7);
+        }
+        
+        List<PawnLoan> loans = pawnLoanRepository.findLoansWithUpcomingRepayments(startDate, endDate);
+        return mapLoansToUpcomingRepaymentResponse(loans);
+    }
+    
+    /**
+     * Helper method to map PawnLoan entities to UpcomingRepaymentLoanResponse DTOs
+     */
+    private List<UpcomingRepaymentLoanResponse> mapLoansToUpcomingRepaymentResponse(List<PawnLoan> loans) {
+        List<UpcomingRepaymentLoanResponse> responses = new ArrayList<>();
+        
+        for (PawnLoan loan : loans) {
+            UpcomingRepaymentLoanResponse response = new UpcomingRepaymentLoanResponse();
+            
+            // Basic loan information
+            response.setId(loan.getId());
+            response.setLoanCode(loan.getLoanCode());
+            
+            // Customer information
+            if (loan.getCustomer() != null) {
+                CustomerResponse customerResponse = new CustomerResponse();
+                customerResponse.setId(loan.getCustomer().getId());
+                customerResponse.setFullName(loan.getCustomer().getFullName());
+                customerResponse.setPhone(loan.getCustomer().getPhone());
+                customerResponse.setIdNumber(loan.getCustomer().getIdNumber());
+                customerResponse.setAddress(loan.getCustomer().getAddress());
+                customerResponse.setStatus(loan.getCustomer().getStatus());
+                response.setCustomer(customerResponse);
+                response.setCustomerPhone(loan.getCustomer().getPhone());
+                // Customer email not available in Customer model
+                response.setCustomerEmail(null);
+            }
+            
+            // Currency information
+            if (loan.getCurrency() != null) {
+                CurrencyResponse currencyResponse = new CurrencyResponse();
+                currencyResponse.setId(loan.getCurrency().getId());
+                currencyResponse.setCode(loan.getCurrency().getCode());
+                currencyResponse.setName(loan.getCurrency().getName());
+                currencyResponse.setSymbol(loan.getCurrency().getSymbol());
+                response.setCurrency(currencyResponse);
+            }
+            
+            // Branch information
+            if (loan.getBranch() != null) {
+                BranchResponse branchResponse = new BranchResponse();
+                branchResponse.setId(loan.getBranch().getId());
+                branchResponse.setName(loan.getBranch().getName());
+                branchResponse.setAddress(loan.getBranch().getAddress());
+                branchResponse.setPhone(loan.getBranch().getPhone());
+                branchResponse.setStatus(loan.getBranch().getStatus());
+                response.setBranch(branchResponse);
+            }
+            
+            // Loan amounts
+            response.setLoanAmount(loan.getLoanAmount());
+            response.setTotalPayableAmount(loan.getTotalPayableAmount());
+            
+            // Calculate remaining balance
+            BigDecimal totalPaid = getTotalPaidAmountByLoanId(loan.getId());
+            BigDecimal remainingBalance = loan.getTotalPayableAmount().subtract(totalPaid);
+            response.setRemainingBalance(remainingBalance);
+            
+            // For simplicity, set next payment amount as the remaining balance
+            // In a real system, this would be calculated based on payment schedule
+            response.setNextPaymentAmount(remainingBalance);
+            
+            // Dates
+            response.setLoanDate(loan.getLoanDate());
+            response.setDueDate(loan.getDueDate());
+            response.setNextPaymentDueDate(loan.getDueDate()); // Assuming due date is next payment
+            
+            // Calculate days until due
+            if (loan.getDueDate() != null) {
+                long daysUntilDue = loan.getDueDate().toEpochDay() - LocalDate.now().toEpochDay();
+                response.setDaysUntilDue((int) daysUntilDue);
+                
+                // Calculate overdue days if applicable
+                if (daysUntilDue < 0) {
+                    response.setOverdueDays((int) Math.abs(daysUntilDue));
+                }
+            }
+            
+            // Status
+            response.setStatus(loan.getStatus());
+            
+            // Determine follow-up priority
+            if (loan.getDueDate() != null) {
+                long daysUntilDue = loan.getDueDate().toEpochDay() - LocalDate.now().toEpochDay();
+                if (daysUntilDue < 0) {
+                    response.setFollowUpPriority("HIGH"); // Overdue
+                } else if (daysUntilDue <= 3) {
+                    response.setFollowUpPriority("HIGH"); // Due within 3 days
+                } else if (daysUntilDue <= 7) {
+                    response.setFollowUpPriority("MEDIUM"); // Due within a week
+                } else {
+                    response.setFollowUpPriority("LOW"); // More than a week away
+                }
+            }
+            
+            // Timestamps
+            response.setCreatedAt(loan.getCreatedAt());
+            response.setUpdatedAt(loan.getUpdatedAt());
+            
+            responses.add(response);
+        }
+        
+        return responses;
     }
     
     // Inner classes for response objects
