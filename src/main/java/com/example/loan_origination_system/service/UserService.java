@@ -167,6 +167,17 @@ public class UserService {
     }
 
     /**
+     * GET by Username (used for /me endpoint)
+     */
+    public User getUserByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new BusinessException(
+                        "USER_NOT_FOUND",
+                        "User not found with username: " + username
+                ));
+    }
+
+    /**
      * FULL UPDATE (PUT)
      */
     @Transactional
