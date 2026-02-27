@@ -96,6 +96,9 @@ jobs:
           path: sbom.spdx.json
           retention-days: 30
 
+    env:
+      JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
+
   # Deploy to Staging (Railway auto-deploys from GitHub, this is just a notification)
   deploy-staging:
     name: Deploy to Staging

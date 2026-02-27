@@ -11,6 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import com.example.loan_origination_system.dto.PawnLoanCreateFullRequest;
 import com.example.loan_origination_system.dto.PawnLoanRequest;
 import com.example.loan_origination_system.exception.BusinessException;
 import com.example.loan_origination_system.mapper.LoanMapper;
@@ -45,6 +46,96 @@ public class PawnLoanService {
     private final PawnItemService pawnItemService;
     private final LoanStateMachine loanStateMachine;
     private final LoanMapper loanMapper;
+    
+    /**
+     * Find or create customer by national ID
+     * If customer exists, return existing customer
+     * If not exists and customerInfo provided, create new customer
+     * If not exists and no customerInfo, throw exception
+     */
+    @Transactional
+    public Customer findOrCreateCustomer(String nationalId, PawnLoanCreateFullRequest.CustomerInfo customerInfo) {
+        // Try to find existing customer
+        return customerRepository.findByIdNumber(nationalId)
+            .orElseGet(() -> {
+                // Customer not found, check if we have info to create new customer
+                if (customerInfo == null) {
+                    throw new BusinessException("CUSTOMER_NOT_FOUND",
+                        "Customer with national ID " + nationalId + " not found and no customer info provided");
+                }
+                
+                // Validate required fields for new customer
+                if (customerInfo.getFullName() == null || customerInfo.getFullName().isBlank()) {
+                    throw new BusinessException("CUSTOMER_NAME_REQUIRED",
+                        "Full name is required for new customer");
+                }
+                
+                if (customerInfo.getPhone() == null || customerInfo.getPhone().isBlank()) {
+                    throw new BusinessException("CUSTOMER_PHONE_REQUIRED",
+                        "Phone is required for new customer");
+                }
+                
+                // Create new customer
+                Customer newCustomer = new Customer();
+                newCustomer.setFullName(customerInfo.getFullName());
+                newCustomer.setPhone(customerInfo.getPhone());
+                newCustomer.setIdNumber(nationalId);
+                newCustomer.setAddress(customerInfo.getAddress());
+                
+                return customerRepository.save(newCustomer);
+            });
+    }
+    
+    /**
+     * Find or create pawn item for a customer
+     * If pawnItemId provided, fetch and validate it belongs to customer
+     * If new collateral details provided, create new pawn item
+     * If neither provided, throw exception
+     */
+    @Transactional
+    public PawnItem findOrCreatePawnItem(Customer customer, PawnLoanCreateFullRequest.CollateralInfo collateralInfo) {
+        // If pawnItemId provided, fetch existing item
+        if (collateralInfo.getPawnItemId() != null) {
+            PawnItem pawnItem = pawnItemRepository.findById(collateralInfo.getPawnItemId())
+                .orElseThrow(() -> new BusinessException("COLLATERAL_NOT_FOUND",
+                    "Collateral with ID " + collateralInfo.getPawnItemId() + " not found"));
+            
+            // Validate ownership
+            if (!pawnItem.getCustomer().getId().equals(customer.getId())) {
+                throw new BusinessException("COLLATERAL_OWNERSHIP_MISMATCH",
+                    "Collateral with ID " + collateralInfo.getPawnItemId() + " does not belong to customer " + customer.getId());
+            }
+            
+            // Validate collateral is available (not already pawned)
+            if (pawnItem.getStatus() != CollateralStatus.AVAILABLE) {
+                throw new BusinessException("COLLATERAL_NOT_AVAILABLE",
+                    "Collateral with ID " + pawnItem.getId() + " is not available for pawn. Current status: " + pawnItem.getStatus());
+            }
+            
+            return pawnItem;
+        }
+        
+        // Otherwise, create new pawn item from collateral info
+        if (collateralInfo.getItemType() == null || collateralInfo.getItemType().isBlank()) {
+            throw new BusinessException("COLLATERAL_TYPE_REQUIRED",
+                "Item type is required for new collateral");
+        }
+        
+        if (collateralInfo.getEstimatedValue() == null) {
+            throw new BusinessException("COLLATERAL_VALUE_REQUIRED",
+                "Estimated value is required for new collateral");
+        }
+        
+        PawnItem newPawnItem = new PawnItem();
+        newPawnItem.setCustomer(customer);
+        newPawnItem.setItemType(collateralInfo.getItemType());
+        newPawnItem.setDescription(collateralInfo.getDescription());
+        newPawnItem.setEstimatedValue(collateralInfo.getEstimatedValue());
+        newPawnItem.setPhotoUrl(collateralInfo.getPhotoUrl());
+        newPawnItem.setStatus(CollateralStatus.AVAILABLE);
+        
+        return pawnItemRepository.save(newPawnItem);
+    }
     
     /**
      * Create a new loan with comprehensive business logic
@@ -182,6 +273,95 @@ public class PawnLoanService {
     }
     
     /**
+     * Create a full loan with customer, collateral, and loan in one request
+     * Business Rules:
+     * 1. Find or create customer by national ID
+     * 2. Find or create collateral
+     * 3. Validate collateral availability
+     * 4. Create loan with business rules
+     * 5. Update collateral status to PAWNED
+     */
+    @Transactional
+    public PawnLoan createFullLoan(PawnLoanCreateFullRequest request) {
+        // 1. Find or create customer
+        Customer customer = findOrCreateCustomer(
+            request.getNationalId(),
+            request.getCustomerInfo()
+        );
+        
+        // 2. Find or create collateral
+        PawnItem pawnItem = findOrCreatePawnItem(
+            customer,
+            request.getCollateralInfo()
+        );
+        
+        // 3. Validate collateral is available (already done in findOrCreatePawnItem for existing items)
+        // For new items, status is already set to AVAILABLE
+        
+        // 4. Validate branch exists
+        Branch branch = branchRepository.findById(request.getLoanInfo().getBranchId())
+            .orElseThrow(() -> new BusinessException("BRANCH_NOT_FOUND",
+                "Branch with ID " + request.getLoanInfo().getBranchId() + " not found"));
+        
+        // 5. Validate currency exists
+        Currency currency = currencyRepository.findById(request.getLoanInfo().getCurrencyId())
+            .orElseThrow(() -> new BusinessException("CURRENCY_NOT_FOUND",
+                "Currency with ID " + request.getLoanInfo().getCurrencyId() + " not found"));
+        
+        // 6. Business Rule: loanAmount <= 70% of collateral estimatedValue
+        BigDecimal maxLoanAmount = pawnItem.getEstimatedValue()
+            .multiply(new BigDecimal("0.70"))
+            .setScale(2, RoundingMode.HALF_UP);
+        
+        if (request.getLoanInfo().getLoanAmount().compareTo(maxLoanAmount) > 0) {
+            throw new BusinessException("LOAN_AMOUNT_EXCEEDS_LIMIT",
+                String.format("Loan amount %.2f exceeds maximum allowed %.2f (70%% of collateral value %.2f)",
+                    request.getLoanInfo().getLoanAmount(), maxLoanAmount, pawnItem.getEstimatedValue()));
+        }
+        
+        // 7. Create loan entity from request
+        PawnLoan loan = new PawnLoan();
+        loan.setCustomer(customer);
+        loan.setPawnItem(pawnItem);
+        loan.setBranch(branch);
+        loan.setCurrency(currency);
+        loan.setLoanAmount(request.getLoanInfo().getLoanAmount());
+        loan.setInterestRate(request.getLoanInfo().getInterestRate());
+        loan.setDueDate(request.getLoanInfo().getDueDate());
+        loan.setRedemptionDeadline(request.getLoanInfo().getRedemptionDeadline());
+        loan.setLoanDurationDays(request.getLoanInfo().getLoanDurationDays());
+        loan.setGracePeriodDays(request.getLoanInfo().getGracePeriodDays());
+        loan.setStorageFee(request.getLoanInfo().getStorageFee());
+        loan.setPenaltyRate(request.getLoanInfo().getPenaltyRate());
+        loan.setPaymentFrequency(request.getLoanInfo().getPaymentFrequency());
+        loan.setNumberOfInstallments(request.getLoanInfo().getNumberOfInstallments());
+        loan.setInstallmentAmount(request.getLoanInfo().getInstallmentAmount());
+        
+        // 8. Calculate total payable amount
+        BigDecimal interestAmount = loan.getLoanAmount()
+            .multiply(loan.getInterestRate().divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
+        
+        BigDecimal storageFee = loan.getStorageFee() != null ? loan.getStorageFee() : BigDecimal.ZERO;
+        BigDecimal totalPayableAmount = loan.getLoanAmount()
+            .add(interestAmount)
+            .add(storageFee)
+            .setScale(2, RoundingMode.HALF_UP);
+        
+        loan.setTotalPayableAmount(totalPayableAmount);
+        
+        // 9. Generate unique loan code
+        String loanCode = generateLoanCode();
+        loan.setLoanCode(loanCode);
+        
+        // 10. Save the loan
+        PawnLoan savedLoan = pawnLoanRepository.save(loan);
+        
+        // 11. Issue the loan using state machine (CREATED → ACTIVE)
+        // This will also update collateral status to PAWNED
+        return loanStateMachine.issueLoan(savedLoan.getId());
+    }
+    
+    /**
      * Get loan by ID
      */
     public PawnLoan getLoanById(Long id) {
@@ -273,6 +453,28 @@ public class PawnLoanService {
         
         // Use state machine to mark as defaulted (ACTIVE → DEFAULTED)
         return loanStateMachine.transition(id, LoanEvent.MANUAL_DEFAULT);
+    }
+    
+    /**
+     * Delete a pawn loan
+     * Business Rules:
+     * 1. Can only delete loans in CREATED or CANCELLED status
+     * 2. Cannot delete if there are existing repayments or forfeits
+     */
+    @Transactional
+    public void deleteLoan(Long id) {
+        PawnLoan loan = getLoanById(id);
+        
+        // Business Rule: Can only delete loans in CREATED or CANCELLED status
+        if (loan.getStatus() != LoanStatus.CREATED && loan.getStatus() != LoanStatus.CANCELLED) {
+            throw new BusinessException("LOAN_CANNOT_BE_DELETED",
+                "Cannot delete loan with ID " + id + " because it is not in CREATED or CANCELLED status. Current status: " + loan.getStatus());
+        }
+        
+        // Note: We could also check for existing repayments/forfeits here
+        // but loans in CREATED/CANCELLED status should not have any.
+        
+        pawnLoanRepository.delete(loan);
     }
     
     /**
@@ -424,5 +626,107 @@ public class PawnLoanService {
         String timestamp = String.valueOf(System.currentTimeMillis());
         String uuid = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         return "LOAN-" + timestamp.substring(timestamp.length() - 6) + "-" + uuid;
+    }
+    
+    /**
+     * Get loans with upcoming repayments within the next X days
+     * @param daysAhead Number of days to look ahead (default 7)
+     * @return List of loans with upcoming repayments
+     */
+    public List<PawnLoan> getLoansWithUpcomingRepayments(int daysAhead) {
+        LocalDate startDate = LocalDate.now();
+        LocalDate endDate = startDate.plusDays(daysAhead);
+        
+        return pawnLoanRepository.findLoansWithUpcomingRepayments(startDate, endDate);
+    }
+    
+    /**
+     * Get loans with upcoming repayments within the next X days with pagination
+     */
+    public Page<PawnLoan> getLoansWithUpcomingRepayments(int daysAhead, Pageable pageable) {
+        LocalDate startDate = LocalDate.now();
+        LocalDate endDate = startDate.plusDays(daysAhead);
+        
+        return pawnLoanRepository.findLoansWithUpcomingRepayments(startDate, endDate, pageable);
+    }
+    
+    /**
+     * Get loans with upcoming repayments within a custom date range
+     */
+    public List<PawnLoan> getLoansWithUpcomingRepayments(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null) {
+            startDate = LocalDate.now();
+        }
+        if (endDate == null) {
+            endDate = startDate.plusDays(7);
+        }
+        
+        return pawnLoanRepository.findLoansWithUpcomingRepayments(startDate, endDate);
+    }
+    
+    /**
+     * Get loans that need follow-up (overdue or approaching due date)
+     * @return List of loans needing follow-up
+     */
+    public List<PawnLoan> getLoansNeedingFollowUp() {
+        LocalDate currentDate = LocalDate.now();
+        return pawnLoanRepository.findLoansNeedingFollowUp(currentDate);
+    }
+    
+    /**
+     * Get customer loans that need follow-up
+     * @param customerId Customer ID
+     * @return List of customer loans needing follow-up
+     */
+    public List<PawnLoan> getCustomerLoansNeedingFollowUp(Long customerId) {
+        return pawnLoanRepository.findCustomerLoansNeedingFollowUp(customerId);
+    }
+    
+    /**
+     * Calculate days until due date
+     */
+    public int calculateDaysUntilDue(LocalDate dueDate) {
+        if (dueDate == null) {
+            return 0;
+        }
+        LocalDate today = LocalDate.now();
+        return (int) java.time.temporal.ChronoUnit.DAYS.between(today, dueDate);
+    }
+    
+    /**
+     * Calculate overdue days
+     */
+    public int calculateOverdueDays(LocalDate dueDate) {
+        if (dueDate == null) {
+            return 0;
+        }
+        LocalDate today = LocalDate.now();
+        if (dueDate.isBefore(today)) {
+            return (int) java.time.temporal.ChronoUnit.DAYS.between(dueDate, today);
+        }
+        return 0;
+    }
+    
+    /**
+     * Determine follow-up priority based on due date proximity
+     */
+    public String determineFollowUpPriority(LocalDate dueDate) {
+        if (dueDate == null) {
+            return "LOW";
+        }
+        
+        int daysUntilDue = calculateDaysUntilDue(dueDate);
+        int overdueDays = calculateOverdueDays(dueDate);
+        
+        if (overdueDays > 0) {
+            if (overdueDays > 30) return "CRITICAL";
+            if (overdueDays > 14) return "HIGH";
+            if (overdueDays > 7) return "MEDIUM";
+            return "LOW";
+        } else {
+            if (daysUntilDue <= 3) return "HIGH";
+            if (daysUntilDue <= 7) return "MEDIUM";
+            return "LOW";
+        }
     }
 }

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.example.loan_origination_system.model.enums.PaymentFrequency;
+import com.example.loan_origination_system.validation.FutureDate;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -12,6 +13,8 @@ import lombok.Data;
 
 @Data
 public class PawnLoanRequest {
+
+    
     @NotNull(message = "Customer ID is required")
     private Long customerId;
     
@@ -33,6 +36,7 @@ public class PawnLoanRequest {
     private BigDecimal interestRate;
     
     @NotNull(message = "Due date is required")
+    @FutureDate(message = "Due date must be in the future", includeToday = true)
     private LocalDate dueDate;
     
     private LocalDate redemptionDeadline;

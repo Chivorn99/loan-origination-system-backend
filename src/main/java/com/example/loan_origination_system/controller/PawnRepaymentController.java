@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.loan_origination_system.dto.ApiResponse;
 import com.example.loan_origination_system.dto.PawnRepaymentRequest;
+import com.example.loan_origination_system.dto.UpcomingRepaymentLoanResponse;
 import com.example.loan_origination_system.model.loan.PawnRepayment;
 import com.example.loan_origination_system.service.PawnRepaymentService;
 
@@ -189,6 +190,38 @@ public class PawnRepaymentController {
         PawnRepaymentService.CustomerRepaymentSummary summary =
             pawnRepaymentService.getCustomerRepaymentSummary(customerId, months);
         return ResponseEntity.ok(ApiResponse.success("Customer repayment summary retrieved successfully", summary));
+    }
+    
+    /**
+     * Get loans with upcoming repayments within the next X days
+     * GET /api/pawn-repayments/upcoming
+     * @param daysAhead Number of days to look ahead (default: 7)
+     * @return List of loans with upcoming repayments
+     */
+    @GetMapping("/upcoming")
+    public ResponseEntity<ApiResponse<List<UpcomingRepaymentLoanResponse>>> getUpcomingRepaymentLoans(
+            @RequestParam(defaultValue = "7") int daysAhead) {
+        List<UpcomingRepaymentLoanResponse> loans = pawnRepaymentService.getUpcomingRepaymentLoans(daysAhead);
+        return ResponseEntity.ok(ApiResponse.success("Upcoming repayment loans retrieved successfully", loans));
+    }
+    
+    /**
+     * Get loans with upcoming repayments within the next X days with pagination
+     * GET /api/pawn-repayments/upcoming/page
+     */
+    @GetMapping("/upcoming/page")
+    public ResponseEntity<ApiResponse<Page<UpcomingRepaymentLoanResponse>>> getUpcomingRepaymentLoansPaginated(
+            @RequestParam(defaultValue = "7") int daysAhead,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "dueDate") String sortBy,
+            @RequestParam(defaultValue = "ASC") String direction) {
+        
+        Sort.Direction sortDirection = direction.equalsIgnoreCase("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
+        
+        Page<UpcomingRepaymentLoanResponse> loans = pawnRepaymentService.getUpcomingRepaymentLoans(daysAhead, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Upcoming repayment loans retrieved successfully", loans));
     }
     
     /**
