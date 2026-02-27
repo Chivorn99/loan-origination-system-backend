@@ -1,6 +1,9 @@
 package com.example.loan_origination_system.controller;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -8,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.loan_origination_system.dto.ApiResponse;
+import com.example.loan_origination_system.dto.PawnLoanCreateFullRequest;
 import com.example.loan_origination_system.dto.PawnLoanRequest;
 import com.example.loan_origination_system.model.enums.LoanStatus;
 import com.example.loan_origination_system.model.loan.PawnLoan;
@@ -42,6 +47,17 @@ public class PawnLoanController {
         PawnLoan createdLoan = pawnLoanService.createLoan(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Loan created successfully", createdLoan));
+    }
+    
+    /**
+     * Create a full loan with customer, collateral, and loan in one request
+     * POST /api/pawn-loans/create-full
+     */
+    @PostMapping("/create-full")
+    public ResponseEntity<ApiResponse<PawnLoan>> createFullLoan(@Valid @RequestBody PawnLoanCreateFullRequest request) {
+        PawnLoan createdLoan = pawnLoanService.createFullLoan(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Loan created successfully with customer and collateral", createdLoan));
     }
     
     /**
@@ -177,5 +193,107 @@ public class PawnLoanController {
         PawnLoan loan = pawnLoanService.getLoanById(id);
         boolean isOverdue = pawnLoanService.isLoanOverdue(loan);
         return ResponseEntity.ok(ApiResponse.success(isOverdue));
+    }
+    
+    /**
+     * Delete a pawn loan
+     * DELETE /api/pawn-loans/{id}
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteLoan(@PathVariable Long id) {
+        pawnLoanService.deleteLoan(id);
+        return ResponseEntity.ok(ApiResponse.success("Loan deleted successfully", null));
+    }
+    
+    /**
+     * Get loans with upcoming repayments for follow-up
+     * GET /api/pawn-loans/upcoming-repayments
+     */
+    @GetMapping("/upcoming-repayments")
+    public ResponseEntity<ApiResponse<List<PawnLoan>>> getLoansWithUpcomingRepayments(
+            @RequestParam(defaultValue = "7") int daysAhead) {
+        List<PawnLoan> loans = pawnLoanService.getLoansWithUpcomingRepayments(daysAhead);
+        return ResponseEntity.ok(ApiResponse.success("Upcoming repayment loans retrieved successfully", loans));
+    }
+    
+    /**
+     * Get loans with upcoming repayments with pagination
+     * GET /api/pawn-loans/upcoming-repayments/page
+     */
+    @GetMapping("/upcoming-repayments/page")
+    public ResponseEntity<ApiResponse<Page<PawnLoan>>> getLoansWithUpcomingRepaymentsPage(
+            @RequestParam(defaultValue = "7") int daysAhead,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "dueDate") String sortBy,
+            @RequestParam(defaultValue = "asc") String direction) {
+        
+        Sort.Direction sortDirection = direction.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
+        
+        Page<PawnLoan> loans = pawnLoanService.getLoansWithUpcomingRepayments(daysAhead, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Upcoming repayment loans retrieved successfully", loans));
+    }
+    
+    /**
+     * Get loans needing follow-up (overdue or approaching due date)
+     * GET /api/pawn-loans/needing-follow-up
+     */
+    @GetMapping("/needing-follow-up")
+    public ResponseEntity<ApiResponse<List<PawnLoan>>> getLoansNeedingFollowUp() {
+        List<PawnLoan> loans = pawnLoanService.getLoansNeedingFollowUp();
+        return ResponseEntity.ok(ApiResponse.success("Loans needing follow-up retrieved successfully", loans));
+    }
+    
+    /**
+     * Get customer loans needing follow-up
+     * GET /api/pawn-loans/customer/{customerId}/needing-follow-up
+     */
+    @GetMapping("/customer/{customerId}/needing-follow-up")
+    public ResponseEntity<ApiResponse<List<PawnLoan>>> getCustomerLoansNeedingFollowUp(@PathVariable Long customerId) {
+        List<PawnLoan> loans = pawnLoanService.getCustomerLoansNeedingFollowUp(customerId);
+        return ResponseEntity.ok(ApiResponse.success("Customer loans needing follow-up retrieved successfully", loans));
+    }
+    
+    /**
+     * Get detailed upcoming repayment information with customer contact details
+     * GET /api/pawn-loans/upcoming-repayments/detailed
+     */
+    @GetMapping("/upcoming-repayments/detailed")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getDetailedUpcomingRepayments(
+            @RequestParam(defaultValue = "7") int daysAhead) {
+        
+        List<PawnLoan> loans = pawnLoanService.getLoansWithUpcomingRepayments(daysAhead);
+        List<Map<String, Object>> detailedLoans = new ArrayList<>();
+        
+        for (PawnLoan loan : loans) {
+            Map<String, Object> loanDetails = new HashMap<>();
+            loanDetails.put("id", loan.getId());
+            loanDetails.put("loanCode", loan.getLoanCode());
+            loanDetails.put("customerName", loan.getCustomer().getFullName());
+            loanDetails.put("customerPhone", loan.getCustomer().getPhone());
+            loanDetails.put("loanAmount", loan.getLoanAmount());
+            loanDetails.put("totalPayableAmount", loan.getTotalPayableAmount());
+            loanDetails.put("dueDate", loan.getDueDate());
+            loanDetails.put("daysUntilDue", pawnLoanService.calculateDaysUntilDue(loan.getDueDate()));
+            loanDetails.put("overdueDays", pawnLoanService.calculateOverdueDays(loan.getDueDate()));
+            loanDetails.put("followUpPriority", pawnLoanService.determineFollowUpPriority(loan.getDueDate()));
+            loanDetails.put("status", loan.getStatus());
+            
+            // Add payment schedule for next payment
+            List<PaymentScheduleItem> schedule = pawnLoanService.generatePaymentSchedule(loan);
+            if (!schedule.isEmpty()) {
+                PaymentScheduleItem nextPayment = schedule.stream()
+                    .filter(item -> "PENDING".equals(item.getStatus()))
+                    .findFirst()
+                    .orElse(schedule.get(0));
+                loanDetails.put("nextPaymentAmount", nextPayment.getAmountDue());
+                loanDetails.put("nextPaymentDueDate", nextPayment.getDueDate());
+            }
+            
+            detailedLoans.add(loanDetails);
+        }
+        
+        return ResponseEntity.ok(ApiResponse.success("Detailed upcoming repayment information retrieved", detailedLoans));
     }
 }

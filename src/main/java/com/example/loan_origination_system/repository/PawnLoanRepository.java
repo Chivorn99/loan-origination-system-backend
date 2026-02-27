@@ -54,4 +54,46 @@ public interface PawnLoanRepository extends JpaRepository<PawnLoan, Long> {
     
     @Query("SELECT l FROM PawnLoan l WHERE l.pawnItem.id = :pawnItemId AND l.status = 'ACTIVE'")
     Optional<PawnLoan> findActiveLoanByPawnItemId(@Param("pawnItemId") Long pawnItemId);
+    
+    /**
+     * Find loans with upcoming repayments (due within the next X days)
+     * @param startDate Start date for due date range (typically today)
+     * @param endDate End date for due date range (today + daysAhead)
+     * @return List of loans due within the date range
+     */
+    @Query("SELECT l FROM PawnLoan l WHERE (l.status = 'ACTIVE' OR l.status = 'PARTIALLY_PAID') " +
+           "AND l.dueDate >= :startDate AND l.dueDate <= :endDate " +
+           "AND l.dueDate IS NOT NULL " +
+           "ORDER BY l.dueDate ASC")
+    List<PawnLoan> findLoansWithUpcomingRepayments(@Param("startDate") LocalDate startDate,
+                                                   @Param("endDate") LocalDate endDate);
+    
+    /**
+     * Find loans with upcoming repayments with pagination
+     */
+    @Query("SELECT l FROM PawnLoan l WHERE (l.status = 'ACTIVE' OR l.status = 'PARTIALLY_PAID') " +
+           "AND l.dueDate >= :startDate AND l.dueDate <= :endDate " +
+           "AND l.dueDate IS NOT NULL " +
+           "ORDER BY l.dueDate ASC")
+    Page<PawnLoan> findLoansWithUpcomingRepayments(@Param("startDate") LocalDate startDate,
+                                                   @Param("endDate") LocalDate endDate,
+                                                   Pageable pageable);
+    
+    /**
+     * Find overdue loans that need follow-up (past due date but not yet defaulted)
+     */
+    @Query("SELECT l FROM PawnLoan l WHERE (l.status = 'ACTIVE' OR l.status = 'PARTIALLY_PAID' OR l.status = 'OVERDUE') " +
+           "AND l.dueDate < :currentDate " +
+           "AND l.dueDate IS NOT NULL " +
+           "ORDER BY l.dueDate ASC")
+    List<PawnLoan> findLoansNeedingFollowUp(@Param("currentDate") LocalDate currentDate);
+    
+    /**
+     * Find loans by customer that need follow-up
+     */
+    @Query("SELECT l FROM PawnLoan l WHERE l.customer.id = :customerId " +
+           "AND (l.status = 'ACTIVE' OR l.status = 'PARTIALLY_PAID' OR l.status = 'OVERDUE') " +
+           "AND l.dueDate IS NOT NULL " +
+           "ORDER BY l.dueDate ASC")
+    List<PawnLoan> findCustomerLoansNeedingFollowUp(@Param("customerId") Long customerId);
 }
