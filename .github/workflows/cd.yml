@@ -98,6 +98,9 @@ jobs:
 
     env:
       JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
+      TELEGRAM_BOT_USERNAME: ${{ secrets.TELEGRAM_BOT_USERNAME }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
 
   # Deploy to Staging (Railway auto-deploys from GitHub, this is just a notification)
   deploy-staging:
