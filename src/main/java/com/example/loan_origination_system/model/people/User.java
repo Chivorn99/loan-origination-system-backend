@@ -1,6 +1,12 @@
 package com.example.loan_origination_system.model.people;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Collections;
+
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import com.example.loan_origination_system.model.master.Branch;
 import com.example.loan_origination_system.model.master.Role;
@@ -19,7 +25,8 @@ import lombok.Data;
 @Entity
 @Table(name = "m_user")
 @Data
-public class User {
+public class User implements UserDetails {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -33,7 +40,7 @@ public class User {
     @Column(nullable = false)
     private String password;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id")
     private Role role;
 
@@ -43,4 +50,32 @@ public class User {
 
     private String status = "ACTIVE";
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        if (this.role != null && this.role.getCode() != null) {
+            return Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + this.role.getCode().toUpperCase()));
+        }
+        return Collections.emptyList();
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return "ACTIVE".equalsIgnoreCase(this.status);
+    }
 }
