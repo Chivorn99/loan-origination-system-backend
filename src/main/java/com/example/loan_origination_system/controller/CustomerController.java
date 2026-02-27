@@ -121,6 +121,35 @@ public class CustomerController {
     }
 
     /**
+     * Search customers by name or ID number
+     *
+     * Examples:
+     * GET /api/customers/search?q=john
+     * GET /api/customers/search?q=12345
+     */
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<Customer>>> searchCustomers(
+            @RequestParam String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String direction) {
+
+        Sort.Direction sortDirection =
+                direction.equalsIgnoreCase("asc")
+                        ? Sort.Direction.ASC
+                        : Sort.Direction.DESC;
+
+        Pageable pageable =
+                PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
+
+        Page<Customer> customers =
+                customerService.searchCustomers(q, pageable);
+
+        return ResponseEntity.ok(ApiResponse.success(customers));
+    }
+
+    /**
      * Soft delete customer
      */
     @DeleteMapping("/{id}")

@@ -148,6 +148,13 @@ public class CustomerService {
     }
 
     /**
+     * SEARCH CUSTOMERS BY NAME OR ID NUMBER
+     */
+    public Page<Customer> searchCustomers(String searchTerm, Pageable pageable) {
+        return customerRepository.searchCustomers(searchTerm, pageable);
+    }
+
+    /**
      * SOFT DELETE
      */
     @Transactional
