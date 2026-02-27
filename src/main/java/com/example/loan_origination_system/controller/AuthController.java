@@ -2,11 +2,14 @@ package com.example.loan_origination_system.controller;
 
 import com.example.loan_origination_system.dto.AuthRequest;
 import com.example.loan_origination_system.dto.AuthResponse;
+import com.example.loan_origination_system.dto.RegisterRequest;
 import com.example.loan_origination_system.security.JwtUtil;
+import com.example.loan_origination_system.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +26,9 @@ public class AuthController {
 
     @Autowired
     private JwtUtil jwtUtil;
+
+    @Autowired
+    private UserService userService;
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody AuthRequest authRequest) {
@@ -44,5 +50,20 @@ public class AuthController {
 
         // 4. Return the token in JSON format
         return ResponseEntity.ok(new AuthResponse(jwt));
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody RegisterRequest registerRequest) {
+        try {
+            // Get current authenticated user's username from security context
+            String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+            
+            // Register new user (only superadmin can do this)
+            var newUser = userService.registerUser(registerRequest, currentUsername);
+            
+            return ResponseEntity.ok(newUser);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 }
