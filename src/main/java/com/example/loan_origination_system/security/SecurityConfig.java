@@ -33,7 +33,7 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        .requestMatchers("/api/auth/login","/api/auth/logout").permitAll()
+                        .requestMatchers("/api/auth/login","/api/auth/logout","/api/customers").permitAll()
                         .anyRequest().authenticated() // EVERY other endpoint requires a valid JWT
                 )
 
